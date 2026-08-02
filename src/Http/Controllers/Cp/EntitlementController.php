@@ -287,7 +287,7 @@ class EntitlementController extends Controller
 
         $order = $request->input('order') === 'asc' ? 'asc' : 'desc';
 
-        /** @var LengthAwarePaginator<Entitlement> $paginator */
+        /** @var LengthAwarePaginator<int, Entitlement> $paginator */
         $paginator = $query
             ->orderBy($sort, $order)
             ->orderBy('id', $order)
