@@ -106,6 +106,23 @@ it('lets the loser of a concurrent provisioning read the winner\'s row instead o
         ->and(Entitlement::query()->where('product_slug', 'course-b')->count())->toBe(1);
 });
 
+it('never widens an existing window on a repeated call', function () {
+    // A README promise, and the reason it is a promise: a retried webhook is not
+    // a renewal. If a grant needs a longer window, that is a change somebody
+    // makes, not a side effect of a delivery that arrived twice.
+    $original = Entitlements::grant(
+        $this->subject, 'course-a', 'thrivecart', 'evt_1', expiresAt: now()->addMonth(),
+    );
+
+    $repeat = Entitlements::grant(
+        $this->subject, 'course-a', 'thrivecart', 'evt_1', expiresAt: now()->addYears(5),
+    );
+
+    expect($repeat->getKey())->toBe($original->getKey())
+        ->and($repeat->expires_at->format('Y-m-d'))->toBe($original->expires_at->format('Y-m-d'))
+        ->and(Entitlement::query()->count())->toBe(1);
+});
+
 it('keeps a repeat purchase of the same product as a separate grant', function () {
     // The tuple is deliberately not narrower. A second purchase arrives with a
     // new provider event id, and collapsing the two would destroy real customer

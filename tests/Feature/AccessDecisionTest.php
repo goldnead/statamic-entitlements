@@ -179,6 +179,17 @@ it('lets a consumer teach it about its own kind of subject', function () {
         ->and($manager->subjectLabel(new SubjectReference('licence', 'LIC-123')))->toBe('Licence LIC-123');
 });
 
+it('gives a superuser no special treatment', function () {
+    // Documented and deliberate. The source system checked `$user->super` inside
+    // the access decision, which binds the package to one user model and hides an
+    // override inside a domain answer. A consumer that wants superusers to bypass
+    // entitlements checks that before asking — and this test is what keeps the
+    // shortcut from creeping back in.
+    $superuser = cpUserWith(['super']);
+
+    expect(Entitlements::allows(new SubjectReference('user', (string) $superuser->id()), 'course-a'))->toBeFalse();
+});
+
 it('rejects a grant with no product slug or no source', function () {
     expect(fn () => Entitlements::grant($this->subject, '  ', 'manual'))->toThrow(InvalidArgumentException::class)
         ->and(fn () => Entitlements::grant($this->subject, 'course-a', ' '))->toThrow(InvalidArgumentException::class);
