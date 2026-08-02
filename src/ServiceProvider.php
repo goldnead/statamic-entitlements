@@ -1,0 +1,229 @@
+<?php
+
+namespace Goldnead\Entitlements;
+
+use Goldnead\Entitlements\Bridges\ActivityBridge;
+use Goldnead\Entitlements\Contracts\PackageResolver;
+use Goldnead\Entitlements\Contracts\SubjectResolver;
+use Goldnead\Entitlements\Query\Scopes\Filters;
+use Goldnead\Entitlements\Support\MorphSubjectResolver;
+use Goldnead\Entitlements\Support\NullPackageResolver;
+use Goldnead\Entitlements\Support\SourceRegistry;
+use Statamic\Facades\CP\Nav;
+use Statamic\Facades\Permission;
+use Statamic\Providers\AddonServiceProvider;
+use Statamic\Query\Scopes\Scope;
+use Statamic\Statamic;
+
+class ServiceProvider extends AddonServiceProvider
+{
+    protected $routes = [
+        'cp' => __DIR__.'/../routes/cp.php',
+    ];
+
+    /**
+     * The Control Panel bundle.
+     *
+     * Statamic 6 reads this from the provider property and *only* from there —
+     * `extra.statamic.vite` in composer.json is not consulted, and an addon that
+     * declares its build there ships a Control Panel with no addon assets at
+     * all. The three values must byte-match `laravel()` in vite.config.js.
+     *
+     * Untyped on purpose: the parent declares it without a type and PHP refuses
+     * a child that narrows one.
+     *
+     * @phpstan-ignore-next-line property.defaultValue
+     */
+    protected $vite = [
+        'hotFile' => __DIR__.'/../resources/dist/hot',
+        'publicDirectory' => 'resources/dist',
+        'input' => ['resources/js/cp.js'],
+    ];
+
+    public function register(): void
+    {
+        parent::register();
+
+        $this->mergeConfigFrom(__DIR__.'/../config/entitlements.php', 'entitlements');
+
+        // The two extension points, bound to null objects so an install that
+        // never touches them behaves as if bundles and custom subjects did not
+        // exist. `bind` rather than `singleton`: a consumer's resolver may hold
+        // request state, and forcing it to be shared would be this package
+        // deciding that for them.
+        $this->app->bind(SubjectResolver::class, MorphSubjectResolver::class);
+        $this->app->bind(PackageResolver::class, NullPackageResolver::class);
+
+        $this->app->singleton(SourceRegistry::class);
+
+        // NOT bound under a short slug. A container key named after the addon is
+        // how a sibling package overwrote Laravel's own `events` dispatcher; the
+        // FQCN cannot collide with anything. The alias exists for Laravel's
+        // container to resolve the facade quickly and is prefixed for the same
+        // reason.
+        $this->app->singleton(EntitlementManager::class);
+        $this->app->alias(EntitlementManager::class, 'statamic-entitlements');
+
+        // Registered against the resolving translator rather than in boot: the
+        // nav and permission labels are built before bootAddon() runs.
+        $langPath = __DIR__.'/../resources/lang';
+
+        $this->app->resolving('translator', fn ($translator) => $translator->addNamespace('entitlements', $langPath));
+
+        if ($this->app->resolved('translator')) {
+            $this->app['translator']->addNamespace('entitlements', $langPath);
+        }
+    }
+
+    public function bootAddon(): void
+    {
+        $this->bootMigrations()
+            ->bootCommands()
+            ->bootFilterScopes()
+            ->bootNavigation()
+            ->bootPermissions()
+            ->bootActivityBridge()
+            ->bootPublishables();
+    }
+
+    protected function bootMigrations(): self
+    {
+        $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+
+        return $this;
+    }
+
+    /**
+     * `src/Commands` is autoloaded by core, but only after Statamic's own boot
+     * sequence — which never fires in a plain console context, which is the only
+     * context this command ever runs in. Registering it here is what makes
+     * `php artisan entitlements:announce` exist on a cron box.
+     */
+    protected function bootCommands(): self
+    {
+        if ($this->app->runningInConsole()) {
+            $this->commands([Console\Commands\AnnounceStateTransitions::class]);
+        }
+
+        return $this;
+    }
+
+    /**
+     * The listing filters.
+     *
+     * They live in `src/Query/Scopes/Filters/`, which core autoloads, so no
+     * `$scopes` property is declared — an explicit list goes stale the moment
+     * somebody adds a class, which surfaces as "my filter does not show up".
+     *
+     * They are still registered here because core's own scope pass runs only
+     * after Statamic's boot sequence has fired, which never happens in a plain
+     * console or test context, so `Scope::filters()` would return nothing there.
+     * `Scope::register()` is idempotent, so core repeating it later costs
+     * nothing. CpFilterScopeTest pins the list.
+     */
+    protected function bootFilterScopes(): self
+    {
+        foreach (self::LISTING_FILTERS as $scope) {
+            $scope::register();
+        }
+
+        return $this;
+    }
+
+    /** @var list<class-string<Scope>> */
+    public const LISTING_FILTERS = [
+        Filters\State::class,
+        Filters\Source::class,
+        Filters\Product::class,
+    ];
+
+    protected function bootNavigation(): self
+    {
+        if (! config('entitlements.cp.enabled', true)) {
+            return $this;
+        }
+
+        Nav::extend(function ($nav): void {
+            $nav->create(__('entitlements::cp.nav'))
+                ->section('Users')
+                // A name from Statamic's own icon set, not a pasted SVG. Registering
+                // the nav item is also what earns the addon its breadcrumbs.
+                ->icon('key')
+                ->route('entitlements.index')
+                ->can('view entitlements');
+        });
+
+        return $this;
+    }
+
+    /**
+     * Three permissions, because there are three genuinely different things to
+     * permit.
+     *
+     * Reading who has access to what is a support task. Handing out access is a
+     * commercial decision. Taking it away is the one that generates a refund
+     * request and an angry email, and it is the one the source system gated
+     * behind the same blanket `access-admin` as everything else — meaning
+     * anybody who could open the Control Panel could do all three.
+     *
+     * `grant` and `revoke` are siblings under `view` rather than nested in each
+     * other: a support role that may grant a replacement licence has no business
+     * revoking one, and the reverse is equally true.
+     */
+    protected function bootPermissions(): self
+    {
+        Permission::extend(function (): void {
+            Permission::group('entitlements', __('entitlements::cp.nav'), function (): void {
+                Permission::register('view entitlements')
+                    ->label(__('entitlements::cp.permission_view'))
+                    ->children([
+                        Permission::make('grant entitlements')
+                            ->label(__('entitlements::cp.permission_grant')),
+                        Permission::make('revoke entitlements')
+                            ->label(__('entitlements::cp.permission_revoke')),
+                    ]);
+            });
+        });
+
+        return $this;
+    }
+
+    /**
+     * Attaches the optional activity bridge.
+     *
+     * Three call sites for one attachment, and the repetition is the point.
+     * Statamic invokes `bootAddon()` from inside a `Statamic::booted()` callback
+     * during the application's boot phase; a nested `$app->booted()` written
+     * there fires *immediately* rather than later, because
+     * `Application::booted()` runs its callback at once when the app is already
+     * booted. So there is no single moment that is reliably late enough.
+     *
+     * `ActivityBridge::attach()` is idempotent and never records a negative
+     * answer, which makes the retries free: the first call that finds the
+     * sibling wins and the rest return at the first line.
+     */
+    protected function bootActivityBridge(): self
+    {
+        if (ActivityBridge::attach($this->app)) {
+            return $this;
+        }
+
+        $this->app->booted(fn () => ActivityBridge::attach($this->app));
+        Statamic::booted(fn () => ActivityBridge::attach($this->app));
+
+        return $this;
+    }
+
+    protected function bootPublishables(): self
+    {
+        $this->publishes([
+            __DIR__.'/../database/migrations' => database_path('migrations'),
+        ], 'entitlements-migrations');
+
+        $this->publishes([
+            __DIR__.'/../resources/lang' => lang_path('vendor/entitlements'),
+        ], 'entitlements-translations');
+
+        return $this;
+    }
+}
