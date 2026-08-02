@@ -24,7 +24,16 @@ things were wrong there, and each one is a design decision here:
 | `revoked_at` was displayed, entered no decision, and **no write path ever set it** — 48 grants, 0 revocations | `revoke()` with a mandatory reason, read by the resolver, fired as an event |
 | **No unique index** for five months; `firstOrCreate()` in PHP loses every race | Unique over the grant tuple, in the table's first migration, with the write path built around the violation |
 
-## Install
+## Requirements
+
+- PHP 8.2+
+- Laravel 12.40+ or 13
+- Statamic 6
+- `goldnead/statamic-brand-context` and `goldnead/statamic-identity-contracts`
+
+Nothing else is required. Every sibling integration is optional and attached by `class_exists`.
+
+## Installation
 
 ```bash
 composer require goldnead/statamic-entitlements
@@ -41,7 +50,9 @@ Schedule::command('entitlements:announce')->everyFifteenMinutes();
 
 It is safe to run as often as you like — see *Events* below.
 
-## Granting
+## Usage
+
+### Granting
 
 ```php
 use Goldnead\Entitlements\Facades\Entitlements;
@@ -74,7 +85,7 @@ Entitlements::restore($grant, $actor);
 Entitlements::enterGracePeriod($grant, now()->addWeek());
 ```
 
-## Asking
+### Asking
 
 ```php
 Entitlements::allows($user, 'chorleiter-kurs');            // bool

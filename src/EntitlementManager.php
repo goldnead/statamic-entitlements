@@ -10,6 +10,7 @@ use Goldnead\Entitlements\Enums\EntitlementState;
 use Goldnead\Entitlements\Events\EntitlementGranted;
 use Goldnead\Entitlements\Events\EntitlementPending;
 use Goldnead\Entitlements\Events\EntitlementRevoked;
+use Goldnead\Entitlements\Facades\Entitlements;
 use Goldnead\Entitlements\Models\Entitlement;
 use Goldnead\Entitlements\Support\AccessDecision;
 use Goldnead\Entitlements\Support\StateResolver;
@@ -22,7 +23,7 @@ use InvalidArgumentException;
 
 /**
  * The public API. Everything a consumer does to entitlements goes through here
- * or through the {@see \Goldnead\Entitlements\Facades\Entitlements} facade.
+ * or through the {@see Entitlements} facade.
  *
  * ## What this class does not do
  *

@@ -115,9 +115,9 @@ class ActivityBridge
         self::record('entitlements.granted', $event->entitlement, [
             'previous_state' => $event->previousState?->value,
             'actor' => $event->actor?->jsonSerialize(),
-        // The dedupe key carries the state it came from, so a grant that goes
-        // Pending -> Active and a grant written straight to Active are two
-        // distinct facts rather than one that overwrites the other.
+            // The dedupe key carries the state it came from, so a grant that goes
+            // Pending -> Active and a grant written straight to Active are two
+            // distinct facts rather than one that overwrites the other.
         ], 'entitlements.granted:'.$event->entitlement->getKey().':'.($event->previousState?->value ?? 'new'));
     }
 

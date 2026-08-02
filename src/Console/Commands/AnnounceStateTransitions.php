@@ -4,6 +4,7 @@ namespace Goldnead\Entitlements\Console\Commands;
 
 use Carbon\CarbonImmutable;
 use Goldnead\BrandContext\Concerns\RunsForEachBrand;
+use Goldnead\Entitlements\EntitlementManager;
 use Goldnead\Entitlements\Enums\EntitlementState;
 use Goldnead\Entitlements\Events\EntitlementExpired;
 use Goldnead\Entitlements\Events\EntitlementGranted;
@@ -76,7 +77,7 @@ class AnnounceStateTransitions extends Command
      * Grants that have reached their start date without anybody being told.
      *
      * `announced_state IS NULL` is the marker for "written as Scheduled and
-     * never announced" — {@see \Goldnead\Entitlements\EntitlementManager} leaves
+     * never announced" — {@see EntitlementManager} leaves
      * it null for exactly that case and sets it for every other creation path.
      */
     private function announceActivations(Dispatcher $events, CarbonImmutable $now, int $limit): int

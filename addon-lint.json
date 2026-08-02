@@ -1,0 +1,52 @@
+{
+    "severity": {
+        "testing.addon-testcase": "minor",
+        "ui.page-width": "minor"
+    },
+
+    "_rationale": {
+        "testing.addon-testcase": [
+            "Downgraded, not disabled: it stays visible in every report.",
+
+            "Statamic\\Testing\\AddonTestCase cannot boot this addon. Its setUp() calls",
+            "Nav::shouldReceive('build'), which swaps the Nav facade for a strict Mockery mock; this",
+            "addon's bootAddon() then calls Nav::extend() and the mock throws BadMethodCallException.",
+            "AddonTestCase also never invokes bootAddon() itself, so the hand-rolled call in",
+            "tests/TestCase.php would have to stay either way. Same finding as statamic-events, which",
+            "reproduced it against statamic/cms v6.26.0 with a probe test.",
+
+            "The bed it would replace is not incidental, and for this package less so than for its",
+            "siblings. It runs the identical suite against real MySQL via DB_DRIVER=mysql",
+            "(phpunit.mysql.xml), which is the only place the unique index this package's central",
+            "guarantee rests on is actually exercised by a real engine. It also pins app.timezone to a",
+            "zone no test uses, so a missing UTC conversion on a column that decides access cannot",
+            "hide, and stubs Statamic's licensing Outpost so the suite does not need the network.",
+
+            "Worth revisiting when core stops mocking Nav in AddonTestCase::setUp()."
+        ],
+
+        "ui.page-width": [
+            "`max-w-5xl 3xl:max-w-6xl mx-auto` with `data-max-width-wrapper` is core's own narrow-page",
+            "variant for detail screens — pages/forms/Show.vue:61, pages/preferences/Edit.vue:14,",
+            "pages/utilities/Licensing.vue:19 — and it is documented as such in",
+            "standards/ui-vocabulary.md §2.3. The wrapper carries `data-max-width-wrapper`, so the",
+            "header's full-width toggle still applies. The listing page uses max-w-page.",
+
+            "The rule reads `max-w-` literally and cannot tell the two variants apart."
+        ],
+
+        "release.versioning": [
+            "Not suppressed, and must not be. The repository is deliberately untagged: publishing this",
+            "addon — Packagist name, Marketplace listing, first tag — is Adrian's decision, not the",
+            "building agent's. The rule is correct and has to keep firing until that decision is made."
+        ],
+
+        "release.screenshots": [
+            "Not suppressed. Screenshots need the addon installed in the studio playground and a",
+            "browser, neither of which the machine this was built on could reach. They belong with the",
+            "Marketplace artwork alongside the rest of the family's."
+        ]
+    },
+
+    "disable": []
+}

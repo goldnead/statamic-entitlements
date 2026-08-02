@@ -2,6 +2,9 @@
 
 namespace Goldnead\Entitlements\Contracts;
 
+use Goldnead\Entitlements\EntitlementManager;
+use Goldnead\Entitlements\Support\NullPackageResolver;
+
 /**
  * Extension point: expanding a bundle into the products it contains.
  *
@@ -15,10 +18,10 @@ namespace Goldnead\Entitlements\Contracts;
  * But access questions are asked about products, while purchases are often made
  * of bundles. Bridging that is the consumer's job, and this is where they do it:
  * given the slug being asked about, return the bundle slugs that would also
- * grant it. {@see \Goldnead\Entitlements\EntitlementManager::decide()} then treats
+ * grant it. {@see EntitlementManager::decide()} then treats
  * a grant for any of them as a grant for the product.
  *
- * The default {@see \Goldnead\Entitlements\Support\NullPackageResolver} returns
+ * The default {@see NullPackageResolver} returns
  * nothing, so an install that never binds one behaves exactly as if bundles did
  * not exist.
  *

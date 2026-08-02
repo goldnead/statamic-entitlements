@@ -35,10 +35,10 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  */
 class Entitlement extends Model
 {
+    use HasBrand;
+
     /** @use HasFactory<EntitlementFactory> */
     use HasFactory;
-
-    use HasBrand;
 
     protected $table = 'entitlements';
 

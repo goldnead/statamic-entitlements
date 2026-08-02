@@ -2,13 +2,14 @@
 
 namespace Goldnead\Entitlements\Contracts;
 
+use Goldnead\Entitlements\Support\MorphSubjectResolver;
 use Goldnead\Entitlements\Support\SubjectReference;
 
 /**
  * Extension point: how an application's own idea of "somebody" becomes a
  * `(type, id)` pair, and how that pair reads in the Control Panel.
  *
- * The default {@see \Goldnead\Entitlements\Support\MorphSubjectResolver} handles
+ * The default {@see MorphSubjectResolver} handles
  * Eloquent models and explicit references, which covers users and CRM contacts.
  * Bind your own implementation to this interface when subjects are not Eloquent
  * models — a Statamic user from the file repository, a licence key, a device.

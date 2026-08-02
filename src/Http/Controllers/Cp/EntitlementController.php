@@ -2,6 +2,7 @@
 
 namespace Goldnead\Entitlements\Http\Controllers\Cp;
 
+use Carbon\CarbonImmutable;
 use Goldnead\Entitlements\EntitlementManager;
 use Goldnead\Entitlements\Enums\EntitlementState;
 use Goldnead\Entitlements\Models\Entitlement;
@@ -11,6 +12,7 @@ use Goldnead\Entitlements\Support\SourceRegistry;
 use Goldnead\Entitlements\Support\SubjectReference;
 use Goldnead\IdentityContracts\Identity;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -231,10 +233,22 @@ class EntitlementController extends Controller
 
         $statamic = StatamicUser::fromUser($user);
 
+        // `email()` is the only one of the three on the User contract. `name()`,
+        // `get()` and `id()` are not, and a Control Panel action that calls them
+        // crashes on exactly the installs hardest to reach for a fix — the ones
+        // with a custom user model. The name is worth having in the audit trail
+        // but not worth a 500, so it is read defensively.
+        //
+        // `method_exists` is legitimate here because `$statamic` is an instance.
+        // It would be useless against a *facade*, which forwards through
+        // __callStatic and declares none of the methods it appears to have, so
+        // the check would answer false forever.
+        $name = $statamic !== null && method_exists($statamic, 'name') ? $statamic->name() : null;
+
         return Identity::user(
             id: (string) $user->getAuthIdentifier(),
             email: $statamic?->email(),
-            name: $statamic?->name(),
+            name: is_string($name) ? $name : null,
         );
     }
 
@@ -246,7 +260,7 @@ class EntitlementController extends Controller
         $format = fn ($date) => $date?->format('Y-m-d H:i').' UTC';
 
         return array_values(array_filter([
-            ['label' => __('entitlements::cp.timeline_created'), 'value' => $format($model->created_at)],
+            ['label' => __('entitlements::cp.timeline_created'), 'value' => $format($model->getAttribute('created_at'))],
             ['label' => __('entitlements::cp.timeline_starts'), 'value' => $format($model->starts_at)],
             ['label' => __('entitlements::cp.timeline_expires'), 'value' => $format($model->expires_at)],
             ['label' => __('entitlements::cp.timeline_grace'), 'value' => $format($model->grace_until)],
@@ -273,7 +287,7 @@ class EntitlementController extends Controller
 
         $order = $request->input('order') === 'asc' ? 'asc' : 'desc';
 
-        /** @var LengthAwarePaginator<int, Entitlement> $paginator */
+        /** @var LengthAwarePaginator<Entitlement> $paginator */
         $paginator = $query
             ->orderBy($sort, $order)
             ->orderBy('id', $order)
@@ -281,7 +295,7 @@ class EntitlementController extends Controller
             ->withQueryString();
 
         return [
-            'data' => collect($paginator->items())->map(fn (Entitlement $e) => $this->row($e))->all(),
+            'data' => array_map(fn (Entitlement $e) => $this->row($e), $paginator->items()),
             'meta' => [
                 'columns' => collect($this->columns())->map->toArray()->all(),
                 'activeFilterBadges' => $badges,
@@ -296,9 +310,9 @@ class EntitlementController extends Controller
     }
 
     /**
-     * @param  \Illuminate\Database\Eloquent\Builder<Entitlement>  $query
+     * @param  Builder<Entitlement>  $query
      */
-    private function applySearch(\Illuminate\Database\Eloquent\Builder $query, string $search): void
+    private function applySearch(Builder $query, string $search): void
     {
         if ($search === '') {
             return;
@@ -366,6 +380,6 @@ class EntitlementController extends Controller
     {
         $value = $this->single($value);
 
-        return $value === null ? null : \Carbon\CarbonImmutable::parse($value);
+        return $value === null ? null : CarbonImmutable::parse($value);
     }
 }

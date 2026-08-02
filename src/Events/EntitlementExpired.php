@@ -2,6 +2,8 @@
 
 namespace Goldnead\Entitlements\Events;
 
+use Carbon\CarbonImmutable;
+use Goldnead\Entitlements\Console\Commands\AnnounceStateTransitions;
 use Goldnead\Entitlements\Models\Entitlement;
 use Illuminate\Foundation\Events\Dispatchable;
 
@@ -12,7 +14,7 @@ use Illuminate\Foundation\Events\Dispatchable;
  * A grant expires because the clock moved past `expires_at`, and no request,
  * job or button was involved — so there is no write to hang the event on.
  *
- * It therefore comes from a scheduled pass ({@see \Goldnead\Entitlements\Console\Commands\AnnounceStateTransitions}),
+ * It therefore comes from a scheduled pass ({@see AnnounceStateTransitions}),
  * and the pass has to be idempotent or every run would re-announce every grant
  * that ever expired. The marker is a dedicated column, `announced_state`,
  * claimed with a conditional UPDATE before the event fires.
@@ -33,6 +35,6 @@ class EntitlementExpired
 
     public function __construct(
         public readonly Entitlement $entitlement,
-        public readonly ?\Carbon\CarbonImmutable $grantedAccessUntil = null,
+        public readonly ?CarbonImmutable $grantedAccessUntil = null,
     ) {}
 }
