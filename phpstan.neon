@@ -1,0 +1,24 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - phpstan-baseline.neon
+
+parameters:
+    # A ratchet for new code, not a mandate to rewrite the package. Everything
+    # the level cannot see today sits in the baseline and has to shrink, never
+    # grow.
+    level: 5
+
+    paths:
+        - src
+        - database
+        - config
+        - routes
+
+    # The activity bridge references classes from an optional sibling addon
+    # (`suggest`, guarded by class_exists). Those classes are legitimately absent
+    # in a bare install, so analysing the file would report every reference as
+    # unknown.
+    excludePaths:
+        - src/Bridges/ActivityBridge.php
+
+    treatPhpDocTypesAsCertain: false

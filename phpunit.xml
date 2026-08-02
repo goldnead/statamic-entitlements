@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="./vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         failOnWarning="true"
+         failOnRisky="true">
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>src</directory>
+        </include>
+    </source>
+    <!--
+        The suite must not pick up a developer's real .env. `DB_CONNECTION=testing`
+        names the connection TestCase::defineEnvironment() configures, which is
+        in-memory SQLite unless DB_DRIVER=mysql says otherwise — see
+        phpunit.mysql.xml.
+
+        APP_TIMEZONE is pinned to something that is neither UTC nor any timezone
+        used in the tests. Every date this package stores is UTC and every one of
+        them decides access; a suite running with app.timezone=UTC cannot tell a
+        correct conversion from a missing one.
+    -->
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_TIMEZONE" value="America/Chicago"/>
+        <env name="DB_CONNECTION" value="testing"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="BRAND_CONTEXT_MULTI_BRAND" value="false"/>
+    </php>
+</phpunit>

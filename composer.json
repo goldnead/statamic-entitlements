@@ -1,0 +1,100 @@
+{
+    "name": "goldnead/statamic-entitlements",
+    "description": "Brand-scoped entitlement grants for Statamic: one state machine, database-level idempotency, real revocation and four domain events. Decides who may access what; sends nothing.",
+    "type": "statamic-addon",
+    "license": "MIT",
+    "keywords": [
+        "statamic",
+        "statamic-addon",
+        "entitlements",
+        "access-control",
+        "grants",
+        "licensing"
+    ],
+    "authors": [
+        {
+            "name": "Adrian Goldner",
+            "email": "info@adriangoldner.com"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/goldnead/statamic-entitlements/issues",
+        "source": "https://github.com/goldnead/statamic-entitlements"
+    },
+    "require": {
+        "php": "^8.2",
+        "goldnead/statamic-brand-context": "^1.0",
+        "goldnead/statamic-identity-contracts": "^1.0",
+        "laravel/framework": "^12.40|^13.0",
+        "statamic/cms": "^6.0"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.18",
+        "orchestra/testbench": "^10.0|^11.0",
+        "pestphp/pest": "^3.0|^4.0|^5.0",
+        "pestphp/pest-plugin-laravel": "^3.0|^4.0|^5.0"
+    },
+    "suggest": {
+        "goldnead/statamic-activity": "Records grants, revocations and expiries into the activity ledger.",
+        "goldnead/statamic-leadhub": "Lets a CRM contact be the subject of a grant, not just a user.",
+        "goldnead/statamic-automations": "Lets automations trigger on the four domain events this addon emits (planned)."
+    },
+    "autoload": {
+        "psr-4": {
+            "Goldnead\\Entitlements\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Goldnead\\Entitlements\\Tests\\": "tests/",
+            "Goldnead\\Entitlements\\Database\\Factories\\": "database/factories/"
+        }
+    },
+    "extra": {
+        "statamic": {
+            "name": "Entitlements",
+            "slug": "entitlements",
+            "description": "Who may access what, with one state machine and a real audit of revocation.",
+            "url": "https://github.com/goldnead/statamic-entitlements",
+            "developer": "Adrian Goldner",
+            "developer-url": "https://gldnr.studio"
+        },
+        "laravel": {
+            "providers": [
+                "Goldnead\\Entitlements\\ServiceProvider"
+            ],
+            "aliases": {
+                "Entitlements": "Goldnead\\Entitlements\\Facades\\Entitlements"
+            }
+        }
+    },
+    "scripts": {
+        "test": [
+            "@php vendor/bin/pest"
+        ],
+        "test:mysql": [
+            "@php vendor/bin/pest -c phpunit.mysql.xml"
+        ],
+        "lint": [
+            "@php vendor/bin/pint --test"
+        ],
+        "fix": [
+            "@php vendor/bin/pint"
+        ],
+        "analyse": [
+            "@php vendor/bin/phpstan analyse --memory-limit=1G"
+        ]
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "pixelfear/composer-dist-plugin": true,
+            "composer/installers": true,
+            "php-http/discovery": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

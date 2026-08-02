@@ -1,0 +1,220 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pest:
+    name: PHP ${{ matrix.php }} · Laravel ${{ matrix.laravel }} · ${{ matrix.stability }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Statamic 6 requires laravel/framework ^12.40 || ^13.0, so those are the
+        # only two lines that can exist. Laravel 11 cannot be installed alongside
+        # statamic/cms ^6.0 at all.
+        php: ['8.2', '8.3', '8.4']
+        laravel: ['^12.40', '^13.0']
+        stability: [prefer-stable]
+        exclude:
+          # Laravel 13 requires PHP ^8.3, so this cell can never resolve.
+          - php: '8.2'
+            laravel: '^13.0'
+        include:
+          # The lowest end of each Laravel line is where an unstated dependency
+          # assumption shows up first.
+          - php: '8.2'
+            laravel: '^12.40'
+            stability: prefer-lowest
+          - php: '8.3'
+            laravel: '^13.0'
+            stability: prefer-lowest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_sqlite, sqlite3, intl, fileinfo, gd
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: |
+          composer require "laravel/framework:${{ matrix.laravel }}" --no-interaction --no-update
+          composer update --${{ matrix.stability }} --prefer-dist --no-progress --no-interaction
+
+      - name: Show installed versions
+        run: composer show | grep -E 'statamic/cms|laravel/framework|goldnead/'
+
+      - name: Run Pest test suite
+        run: vendor/bin/pest --colors=always
+
+  mysql:
+    name: MySQL
+    runs-on: ubuntu-latest
+
+    # SQLite has no InnoDB key-length limit, no utf8mb4 byte arithmetic, no fixed
+    # column widths and no enforced foreign keys unless asked for. A green SQLite
+    # run is therefore not evidence that the migrations build — statamic-notifications
+    # v1.0.3 shipped an index MySQL refuses outright with a fully green suite.
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_DATABASE: entitlements_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_mysql, intl, fileinfo, gd
+          coverage: none
+          tools: composer:v2
+
+      - run: composer update --prefer-dist --no-progress --no-interaction
+
+      - name: Run the identical suite against MySQL
+        env:
+          DB_DRIVER: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: '3306'
+          DB_DATABASE: entitlements_test
+          DB_USERNAME: root
+          DB_PASSWORD: ''
+        run: vendor/bin/pest -c phpunit.mysql.xml --colors=always
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: composer:v2
+
+      - run: composer update --prefer-dist --no-progress --no-interaction
+
+      # Check, never fix. Auto-committing style onto a branch rewrites work
+      # nobody asked to have rewritten.
+      - name: Pint
+        run: vendor/bin/pint --test
+
+      # Level 5 with a committed baseline. The baseline is a ratchet: existing
+      # debt is listed in phpstan-baseline.neon, new code has to pass without it.
+      - name: PHPStan
+        run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+
+  standards:
+    name: addon standards
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: addon
+          persist-credentials: false
+
+      - uses: actions/checkout@v4
+        with:
+          repository: goldnead/statamic-addon-studio
+          path: studio
+          token: ${{ secrets.STUDIO_TOKEN }}
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: composer:v2
+
+      - name: Run addon-lint
+        run: php studio/tools/addon-lint/bin/addon-lint addon --no-color --fail-on=major -v
+
+  js:
+    name: Vue components
+    runs-on: ubuntu-latest
+
+    # The two Control Panel pages are the only surface no PHP test can reach.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: composer:v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # @statamic/cms resolves from vendor/, so Composer must run first.
+      - run: composer update --prefer-dist --no-progress --no-interaction
+
+      - run: npm ci --ignore-scripts
+
+      - run: npm test
+
+  assets:
+    name: built assets are current
+    runs-on: ubuntu-latest
+
+    # resources/dist is committed because consumers install with Composer and
+    # have no Node toolchain. Without this job a source change ships green while
+    # the bundle the Control Panel actually loads stays stale.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: composer:v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: composer update --prefer-dist --no-progress --no-interaction
+
+      - run: npm ci --ignore-scripts
+
+      - run: npm run build
+
+      - name: Fail if the committed bundle is stale
+        run: git diff --exit-code -- resources/dist

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    The same suite, against a real MySQL server.
+
+        vendor/bin/pest -c phpunit.mysql.xml
+
+    This leg is not optional for this package, because the single most important
+    guarantee it makes is enforced by the database and not by the code: the
+    unique index over (subject, product, source, source_ref, brand). SQLite will
+    happily create that index, but the class of defect that makes it useless in
+    production is invisible there — InnoDB's 3072-byte key limit, utf8mb4's four
+    bytes per character, prefix lengths, and comparison under the column
+    collation, which is case- and trailing-space-insensitive in MySQL and not in
+    SQLite.
+
+    Point DB_HOST/DB_PORT/DB_DATABASE/DB_USERNAME/DB_PASSWORD at a throwaway
+    database; the suite migrates it from scratch on every run.
+
+    tests/Unit/IndexKeyLengthTest.php measures the key arithmetic without a
+    server, so CI does not depend on this file for that. It exists for the run
+    that proves the compiled DDL and the real engine agree — and for
+    IdempotencyTest, which races two inserts and needs a real engine to lose the
+    race against.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="./vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         failOnWarning="true"
+         failOnRisky="true">
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>src</directory>
+        </include>
+    </source>
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_TIMEZONE" value="America/Chicago"/>
+        <env name="DB_CONNECTION" value="testing"/>
+        <env name="DB_DRIVER" value="mysql"/>
+        <env name="DB_HOST" value="127.0.0.1"/>
+        <env name="DB_PORT" value="3306"/>
+        <env name="DB_DATABASE" value="entitlements_test"/>
+        <env name="DB_USERNAME" value="root"/>
+        <env name="DB_PASSWORD" value=""/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="BRAND_CONTEXT_MULTI_BRAND" value="false"/>
+    </php>
+</phpunit>
