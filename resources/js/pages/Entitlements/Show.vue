@@ -83,8 +83,19 @@ const badgeColour = {
             </ButtonGroup>
         </Header>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Panel class="lg:col-span-2 h-full flex flex-col">
+        <!--
+            The single-column grid utility is deliberately absent: a grid falls back
+            to one column on its own, and every addon shipping a Tailwind build emits
+            that same bare, breakpoint-less rule into the shared `addon-utilities`
+            layer. Media queries add no specificity, so the stylesheet that loads last
+            wins against this element's `lg:` variant. Do not name the class in a
+            comment either — Tailwind scans comments as candidates and would emit it.
+            `min-w-0` per panel rather than `*:min-w-0` on the container: this addon
+            ships no stylesheet of its own, so only utilities that Statamic core
+            already emits actually exist. Core has `min-w-0`; it has no child variant.
+        -->
+        <div class="grid lg:grid-cols-3 gap-6">
+            <Panel class="min-w-0 lg:col-span-2 h-full flex flex-col">
                 <PanelHeader class="flex items-center justify-between min-h-10">
                     <Heading>{{ __('entitlements::cp.grant_details') }}</Heading>
 
@@ -143,7 +154,7 @@ const badgeColour = {
                 </Card>
             </Panel>
 
-            <Panel class="h-full flex flex-col">
+            <Panel class="min-w-0 h-full flex flex-col">
                 <PanelHeader class="flex items-center min-h-10">
                     <Heading>{{ __('entitlements::cp.timeline') }}</Heading>
                 </PanelHeader>
