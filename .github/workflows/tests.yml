@@ -139,40 +139,25 @@ jobs:
     name: addon standards
     runs-on: ubuntu-latest
 
-    # The studio repository is private, so this gate needs a token that can read
-    # it. Where that secret is absent the job reports neutral instead of failing:
-    # a permanently red check is one people learn to ignore, and this gate is
-    # worth more than the habit of skipping it. `addon-lint` still runs locally
-    # (statamic-addon-studio/tools/addon-lint). Setting STUDIO_TOKEN in the
-    # repository — or making the studio public — turns the gate back on with no
-    # further change here.
-    env:
-      HAS_STUDIO_TOKEN: ${{ secrets.STUDIO_TOKEN != '' }}
-
     steps:
       - uses: actions/checkout@v4
-        if: env.HAS_STUDIO_TOKEN == 'true'
         with:
           path: addon
           persist-credentials: false
 
       - uses: actions/checkout@v4
-        if: env.HAS_STUDIO_TOKEN == 'true'
         with:
           repository: goldnead/statamic-addon-studio
           path: studio
-          token: ${{ secrets.STUDIO_TOKEN }}
           persist-credentials: false
 
       - uses: shivammathur/setup-php@v2
-        if: env.HAS_STUDIO_TOKEN == 'true'
         with:
           php-version: '8.3'
           coverage: none
           tools: composer:v2
 
       - name: Run addon-lint
-        if: env.HAS_STUDIO_TOKEN == 'true'
         run: php studio/tools/addon-lint/bin/addon-lint addon --no-color --fail-on=major -v
 
   js:
