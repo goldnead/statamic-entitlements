@@ -4,7 +4,19 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this package
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.1] — 2026-08-05
+
+### Fixed
+
+- The breakpoint-less single-column grid utility is no longer used on the detail screen. Every
+  addon in this family ships its own Tailwind build and all of them land in the same
+  `addon-utilities` layer; media queries add no specificity, so that bare rule from whichever
+  addon stylesheet loads last won against this screen's `lg:` variant and pinned the grid to one
+  column at every width. Invisible when this addon is checked alone, visible as soon as two
+  addons of the family are installed together. A grid falls back to one column on its own, and
+  the overflow guard the utility's `minmax(0,1fr)` track provided is now explicit on the panels.
+
+## [1.0.0] — 2026-08-03
 
 ### Added
 
