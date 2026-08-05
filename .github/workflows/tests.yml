@@ -143,6 +143,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: addon
+          # release.versioning reads the repository's tags. actions/checkout
+          # fetches none by default, so without this the rule reports a tagged
+          # release as untagged — the tool erring, not the addon.
+          fetch-depth: 0
           persist-credentials: false
 
       - uses: actions/checkout@v4
