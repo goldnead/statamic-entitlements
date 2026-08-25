@@ -4,6 +4,18 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this package
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] — 2026-08-25
+
+### Fixed
+
+- **A grant without an expiry date showed the word " UTC" in the listing.** `$date?->format(...).'
+  UTC'` looks right and is not: the nullsafe operator short-circuits only the call, so a null date
+  still concatenated. The detail panel filtered that string back out afterwards — a workaround that
+  hid the bug rather than fixing it — while the listing printed it at the reader.
+
+  Both now go through one method that returns null for a missing date. Found by installing this
+  addon next to its twenty siblings in a demo and looking at the screen.
+
 ## [1.0.1] — 2026-08-05
 
 ### Fixed

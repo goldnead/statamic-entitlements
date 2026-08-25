@@ -253,11 +253,24 @@ class EntitlementController extends Controller
     }
 
     /**
+     * A date, or nothing at all.
+     *
+     * `$date?->format(...).' UTC'` looks right and is not: the nullsafe operator
+     * short-circuits only the call, so a null date still concatenates and the
+     * column reads " UTC". The timeline used to filter that string back out
+     * afterwards; the listing did not, and showed it.
+     */
+    private function stamp(mixed $date): ?string
+    {
+        return $date ? $date->format('Y-m-d H:i').' UTC' : null;
+    }
+
+    /**
      * @return list<array{label: string, value: string|null}>
      */
     private function timeline(Entitlement $model): array
     {
-        $format = fn ($date) => $date?->format('Y-m-d H:i').' UTC';
+        $format = fn ($date) => $this->stamp($date);
 
         return array_values(array_filter([
             ['label' => __('entitlements::cp.timeline_created'), 'value' => $format($model->getAttribute('created_at'))],
@@ -265,7 +278,7 @@ class EntitlementController extends Controller
             ['label' => __('entitlements::cp.timeline_expires'), 'value' => $format($model->expires_at)],
             ['label' => __('entitlements::cp.timeline_grace'), 'value' => $format($model->grace_until)],
             ['label' => __('entitlements::cp.timeline_revoked'), 'value' => $format($model->revoked_at)],
-        ], fn (array $row): bool => $row['value'] !== ' UTC'));
+        ], fn (array $row): bool => $row['value'] !== null));
     }
 
     /** The <Listing> response contract: `data` plus `meta` carrying columns on every page. */
@@ -362,7 +375,7 @@ class EntitlementController extends Controller
             'state_label' => $state->label(),
             'grants_access' => $state->grantsAccess(),
             'source' => app(SourceRegistry::class)->label($entitlement->source),
-            'expires_at' => $entitlement->expires_at?->format('Y-m-d H:i').' UTC',
+            'expires_at' => $this->stamp($entitlement->expires_at),
             'show_url' => cp_route('entitlements.show', ['entitlement' => $entitlement->getKey()]),
         ];
     }
