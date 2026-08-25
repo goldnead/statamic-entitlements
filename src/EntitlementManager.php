@@ -9,6 +9,7 @@ use Goldnead\Entitlements\Contracts\SubjectResolver;
 use Goldnead\Entitlements\Enums\EntitlementState;
 use Goldnead\Entitlements\Events\EntitlementGranted;
 use Goldnead\Entitlements\Events\EntitlementPending;
+use Goldnead\Entitlements\Events\EntitlementRenewed;
 use Goldnead\Entitlements\Events\EntitlementRevoked;
 use Goldnead\Entitlements\Facades\Entitlements;
 use Goldnead\Entitlements\Models\Entitlement;
@@ -177,6 +178,70 @@ class EntitlementManager
         $this->events->dispatch(new EntitlementGranted($entitlement, EntitlementState::Pending, $actor));
 
         return true;
+    }
+
+    /**
+     * Push an existing grant's window forward.
+     *
+     * A subscription that renews every month must not create a grant every
+     * month. `grant()` deliberately refuses to widen an existing window — "a
+     * retry is not a renewal" — so a billing cycle calling it either does
+     * nothing (same `source_ref`) or writes a second row (new `source_ref`).
+     * Twelve months of that is twelve grants for one membership, and the
+     * question "does this person have access" becomes an aggregation.
+     *
+     * So renewal is its own verb, and it is deliberately narrow:
+     *
+     * - **It never shortens.** A late webhook carrying last month's date must
+     *   not take away time somebody paid for. If `$until` is earlier than what
+     *   the row already holds, the row wins and nothing is announced.
+     * - **It lifts a grace period.** Payment arriving is exactly the thing a
+     *   grace period was waiting for.
+     * - **It refuses a revoked grant.** Access taken away deliberately is not
+     *   restored by a payment; that is what `restore()` is for, and it is a
+     *   decision somebody makes.
+     * - **It returns null when there is nothing to renew**, so the caller can
+     *   fall back to `grant()` — the honest answer for a first payment.
+     *
+     * @param  mixed  $subject  the subject reference, as everywhere else
+     */
+    public function renew(
+        mixed $subject,
+        string $productSlug,
+        DateTimeInterface $until,
+        ?Identity $actor = null,
+    ): ?Entitlement {
+        $entitlement = $this->forSubject($subject)
+            ->where('product_slug', $productSlug)
+            ->whereNot('status', EntitlementState::Revoked->value)
+            ->orderByDesc('expires_at')
+            ->first();
+
+        if ($entitlement === null) {
+            return null;
+        }
+
+        $bisher = $entitlement->expires_at;
+        $neu = CarbonImmutable::parse($until)->utc();
+
+        // Nie verkuerzen. Eine verspaetete Zustellung traegt ein altes Datum,
+        // und die Zeit ist bezahlt.
+        if ($bisher !== null && $neu->lessThanOrEqualTo($bisher)) {
+            return $entitlement;
+        }
+
+        $entitlement->forceFill([
+            'expires_at' => $neu,
+            'grace_until' => null,
+            'status' => EntitlementState::Active->value,
+            // Der Zustand ist wieder Active, also darf der naechste Ablauf
+            // erneut angekuendigt werden.
+            'announced_state' => EntitlementState::Active->value,
+        ])->save();
+
+        $this->events->dispatch(new EntitlementRenewed($entitlement->fresh() ?? $entitlement, $bisher, $actor));
+
+        return $entitlement->fresh() ?? $entitlement;
     }
 
     /**
