@@ -4,6 +4,25 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this package
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] — 2026-08-26
+
+### Fixed
+
+- **The listing now asks the host's `SubjectResolver`.** The detail view always did; the listing
+  did not, so a host that had gone to the trouble of binding a resolver still read
+  `App\Models\User:4` on the one screen people actually scan. The resolver worked. Nothing asked
+  it.
+
+  Found by opening the screen, and it is the failure mode this package's own suite could not see:
+  with the shipped `MorphSubjectResolver` both paths return the same raw key, so the listing looked
+  correct in every test that never bound one. The new test binds one, which is the only way the
+  difference exists at all.
+
+  The row now carries both `subject` (the resolved label, falling back to the key as
+  `subjectLabel()` always has) and `subject_key` (the raw key). The listing prints the key beside
+  the name only when it adds something: a name is a display, not an identity, and two members can
+  share one.
+
 ## [1.1.0] — 2026-08-25
 
 ### Added

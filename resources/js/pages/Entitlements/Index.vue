@@ -118,7 +118,17 @@ const badgeColour = {
                 </template>
 
                 <template #cell-subject="{ row }">
-                    <span class="font-mono text-xs">{{ row.subject }}</span>
+                    <!-- subjectLabel() already falls back to the raw key, so
+                         the two are equal whenever the host named nobody. A
+                         name reads as a name; a key stays monospaced, because
+                         that is what it is. The key rides along only when it
+                         adds something: a name is a display, not an identity,
+                         and two members can share one. -->
+                    <template v-if="row.subject !== row.subject_key">
+                        <span class="text-sm">{{ row.subject }}</span>
+                        <span class="font-mono text-2xs text-gray-500 dark:text-gray-400 ms-1.5">{{ row.subject_key }}</span>
+                    </template>
+                    <span v-else class="font-mono text-xs">{{ row.subject_key }}</span>
                 </template>
 
                 <template #cell-state="{ row }">

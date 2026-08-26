@@ -370,7 +370,18 @@ class EntitlementController extends Controller
         return [
             'id' => $entitlement->getKey(),
             'product_slug' => $entitlement->product_slug,
-            'subject' => $entitlement->subjectKey(),
+            // The resolver's label when the host provides one, the raw key when
+            // it does not. The detail view has always asked; the listing did
+            // not, so a host that had gone to the trouble of binding a
+            // SubjectResolver still read `App\Models\User:4` on the one screen
+            // people actually scan. Found by looking at it.
+            'subject' => $this->entitlements->subjectLabel(
+                new SubjectReference($entitlement->subject_type, $entitlement->subject_id)
+            ),
+            // Kept alongside, because the label is a display name and the key
+            // is the identity: two members can share a name, and a support
+            // question starts from the row you can point at.
+            'subject_key' => $entitlement->subjectKey(),
             'state' => $state->value,
             'state_label' => $state->label(),
             'grants_access' => $state->grantsAccess(),
