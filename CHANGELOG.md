@@ -4,6 +4,42 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this package
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] — 2026-08-29
+
+### Added: this addon's figures appear in Insights
+
+From 1.1.0 `statamic-insights` is no longer a revenue report but the family's reporting layer: an
+addon registers what it can count and gets the period, the comparison against the period before,
+the chart, the breakdowns and two finished screens in return.
+
+The coupling is optional in **both** directions. Without Insights nothing here is missing; without
+this addon only its own group is missing over there. `suggest`, never `require`.
+
+Every figure follows the contract's house rules: **null is not zero** (a rate with no denominator
+has no answer and does not print 0 %), `available()` decides existence and never the data, gaps in
+a series are filled by Insights rather than by the metric, and a filter a metric does not
+understand is ignored rather than fatal.
+
+Four figures: granted, revoked, expired, active. The active one is a stock and is therefore asked of
+an instant rather than of a window.
+
+Two things found here went back upstream. This package writes its timestamps in UTC unconditionally,
+which had the clamp on "now" reading the wrong clock — one `zone()` now, instead of a restated
+`untilNow()`. And the test that used to hold that the figures do **not** stop at a brand boundary is
+reversed: a tile counting four brands beside one counting a single brand is a data leak between
+customers, not a feature.
+
+### Fixed: a figure counts the current brand only
+
+While the family was being wired up this question got four different answers, and side by side on
+one screen that is worse than none: one tile showed three other brands' turnover while its
+neighbour filtered correctly. The rule now lives once, in `TableMetric::brandScoped()`, transcribed
+from `BrandScope::apply()`; this package only names the column, and the figure, the chart and every
+breakdown narrow together.
+
+With no brand selected the tile reads **0 and stays**. A reader can make sense of a zero; a tile
+that is not there he cannot notice.
+
 ## [1.1.1] — 2026-08-26
 
 ### Fixed
