@@ -684,6 +684,70 @@ class InsightsMetricsTest extends TestCase
     }
 
     /**
+     * The stock had the same defect, and it did not arrive by inheritance.
+     *
+     * The three event figures beside this one go through
+     * {@see TableMetric::inPeriod()} and were repaired there. This one cannot:
+     * a stock is asked *of an instant*, so it writes its own comparisons — and
+     * they were the inclusive kind. A grant that began at 23:59:59.500 on the
+     * closing day was therefore counted by "granted" and missing from
+     * "active", on the same screen, for the same period.
+     *
+     * The row is written past the model's cast on purpose: the cast formats to
+     * whole seconds, so through it the case cannot be stated at all.
+     */
+    #[Test]
+    public function a_grant_beginning_in_the_last_fraction_of_the_final_second_is_live_at_the_close(): void
+    {
+        $this->rawGrant('kurz-vor-zwoelf', startsAt: '2026-08-19 23:59:59.500');
+
+        $tag = new MetricQuery(Period::between(
+            Carbon::parse('2026-08-19 00:00:00', 'UTC'),
+            Carbon::parse('2026-08-19 23:59:59', 'UTC'),
+        ));
+
+        $this->assertSame(1, (new Granted)->value($tag), 'the fixture is meant to be inside the day at all');
+        $this->assertSame(1, (new Active)->value($tag), 'and a grant that began inside the day is live at its close');
+        $this->assertSame(['2026-08-19' => 1], (new Active)->series($tag), 'the running balance has to agree with the headline');
+    }
+
+    /**
+     * And the same second at the other end: a grant that leaves in it has left.
+     *
+     * The mirror of the case above, and the one that would have read as an
+     * over-count rather than an under-count: compared inclusively, a grant
+     * whose `expires_at` or `revoked_at` fell in the final fraction was still
+     * live at the close — while the "expired" and "revoked" figures beside it,
+     * which inherit their window, already counted it as gone.
+     *
+     * Two rows rather than one, because the departures are two disjoint
+     * queries: `LEAST()` is spelled differently in every dialect, so a row
+     * leaving by its own clock and a row withdrawn by hand are asked for
+     * separately, and a repair to one is not a repair to the other.
+     */
+    #[Test]
+    public function a_grant_ending_in_the_last_fraction_of_the_final_second_has_left_the_close(): void
+    {
+        $this->rawGrant('laeuft-ab', startsAt: '2026-08-18 09:00:00', expiresAt: '2026-08-19 23:59:59.500');
+        $this->rawGrant('zurueckgezogen', startsAt: '2026-08-18 09:00:00', revokedAt: '2026-08-19 23:59:59.500');
+
+        $fenster = new MetricQuery(Period::between(
+            Carbon::parse('2026-08-18 00:00:00', 'UTC'),
+            Carbon::parse('2026-08-19 23:59:59', 'UTC'),
+        ));
+
+        $this->assertSame(1, (new Expired)->value($fenster), 'the expiry is inside the window for the figure that inherits its window');
+        $this->assertSame(1, (new Revoked)->value($fenster), 'and so is the withdrawal');
+
+        $this->assertSame(0, (new Active)->value($fenster), 'so neither grant may still be live at the close');
+        $this->assertSame(
+            ['2026-08-18' => 2],
+            (new Active)->series($fenster),
+            'both arrive on the 18th and both leave on the 19th, which is a level of zero and therefore no column',
+        );
+    }
+
+    /**
      * One row written straight to the table, so a sub-second timestamp survives.
      *
      * {@see grant()} goes through the model, which is the right way to build a
@@ -691,8 +755,13 @@ class InsightsMetricsTest extends TestCase
      * whole seconds and the fraction would be gone before it reached the
      * database.
      */
-    protected function rawGrant(string $ref, string $startsAt, int $brandId = 1): void
-    {
+    protected function rawGrant(
+        string $ref,
+        string $startsAt,
+        ?string $expiresAt = null,
+        ?string $revokedAt = null,
+        int $brandId = 1,
+    ): void {
         DB::table('entitlements')->insert([
             'brand_id' => $brandId,
             'subject_type' => 'user',
@@ -700,8 +769,10 @@ class InsightsMetricsTest extends TestCase
             'product_slug' => 'kurs-a',
             'source' => 'manual',
             'source_ref' => $ref,
-            'status' => EntitlementState::Active->value,
+            'status' => ($revokedAt === null ? EntitlementState::Active : EntitlementState::Revoked)->value,
             'starts_at' => $startsAt,
+            'expires_at' => $expiresAt,
+            'revoked_at' => $revokedAt,
             'created_at' => $startsAt,
             'updated_at' => $startsAt,
         ]);

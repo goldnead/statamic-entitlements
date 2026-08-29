@@ -4,6 +4,7 @@ namespace Goldnead\Entitlements\Integrations\Insights;
 
 use Goldnead\Entitlements\Enums\EntitlementState;
 use Goldnead\StatamicInsights\Support\MetricQuery;
+use Goldnead\StatamicInsights\Support\Period;
 use Goldnead\StatamicInsights\Support\TableMetric;
 use Goldnead\StatamicInsights\Support\Unit;
 use Illuminate\Database\Query\Builder;
@@ -189,18 +190,45 @@ class Active extends EntitlementMetric
     // -- The queries --------------------------------------------------------
 
     /**
+     * The first instant **after** a moment, so nothing is compared inclusively.
+     *
+     * The same device as {@see Period::toExclusive()}, and here for the same
+     * reason. The moment a stock is asked of is the period's `to`, which is
+     * 23:59:59.999999, and a query binding formats a date as `Y-m-d H:i:s` —
+     * the fraction is cut off. Compared with `<=` against a column that keeps
+     * milliseconds, a grant that began at 23:59:59.500 on the closing day was
+     * not yet live at the close, and one that ended in that same fraction was
+     * still live. Both silently, and only on the engines that keep the
+     * fraction.
+     *
+     * With the boundary moved to the following midnight there is nothing left
+     * to truncate: `starts_at < T'` is exactly `starts_at <= T`, and
+     * `expires_at >= T'` is exactly `expires_at > T`, at every precision.
+     */
+    protected function justAfter(Carbon $moment): Carbon
+    {
+        return $moment->copy()->addSecond()->startOfSecond();
+    }
+
+    /**
      * Grants that are live at one instant.
      *
      * The definition, in one place, used by `value()` and by the opening
      * balance. Everything else in this class is an optimisation of it.
+     *
+     * Stated against the instant *after* the one asked about — see
+     * {@see justAfter()} for why the inclusive form could not survive a
+     * millisecond column.
      */
     protected function liveAt(Carbon $moment): Builder
     {
+        $bis = $this->justAfter($moment);
+
         return $this->rows()
             ->whereNotNull('starts_at')
-            ->where('starts_at', '<=', $moment)
-            ->where(fn (Builder $rows) => $rows->whereNull('expires_at')->orWhere('expires_at', '>', $moment))
-            ->where(fn (Builder $rows) => $rows->whereNull('revoked_at')->orWhere('revoked_at', '>', $moment));
+            ->where('starts_at', '<', $bis)
+            ->where(fn (Builder $rows) => $rows->whereNull('expires_at')->orWhere('expires_at', '>=', $bis))
+            ->where(fn (Builder $rows) => $rows->whereNull('revoked_at')->orWhere('revoked_at', '>=', $bis));
     }
 
     /**
@@ -222,11 +250,22 @@ class Active extends EntitlementMetric
             ->count();
     }
 
+    /**
+     * Grants that began inside the window.
+     *
+     * Half-open, like every other window in this family: `whereBetween` is
+     * inclusive at the far end, and an inclusive far end is truncated to the
+     * second by the binding — so a grant that began at 23:59:59.500 on the
+     * closing day arrived in no bucket at all, while the closing figure (now)
+     * counts it. The two numbers are read from the same chart and have to
+     * agree. See {@see justAfter()}.
+     */
     protected function arrivedBetween(Carbon $start, Carbon $end): Builder
     {
         return $this->rows()
             ->whereNotNull('starts_at')
-            ->whereBetween('starts_at', [$start, $end]);
+            ->where('starts_at', '>=', $start)
+            ->where('starts_at', '<', $this->justAfter($end));
     }
 
     /**
@@ -236,23 +275,31 @@ class Active extends EntitlementMetric
      * exist, exactly one of `revoked_at > expires_at` and
      * `revoked_at <= expires_at` holds, so no row is subtracted twice and none
      * is missed.
+     *
+     * Half-open at the far end, for the reason given on {@see justAfter()}.
      */
     protected function expiredBetween(Carbon $start, Carbon $end): Builder
     {
         return $this->rows()
             ->whereNotNull('expires_at')
-            ->whereBetween('expires_at', [$start, $end])
+            ->where('expires_at', '>=', $start)
+            ->where('expires_at', '<', $this->justAfter($end))
             ->where(fn (Builder $rows) => $rows
                 ->whereNull('revoked_at')
                 ->orWhereColumn('revoked_at', '>', 'expires_at'));
     }
 
-    /** Rows that left by being withdrawn, at or before they would have run out. */
+    /**
+     * Rows that left by being withdrawn, at or before they would have run out.
+     *
+     * Half-open at the far end, for the reason given on {@see justAfter()}.
+     */
     protected function revokedBetween(Carbon $start, Carbon $end): Builder
     {
         return $this->rows()
             ->whereNotNull('revoked_at')
-            ->whereBetween('revoked_at', [$start, $end])
+            ->where('revoked_at', '>=', $start)
+            ->where('revoked_at', '<', $this->justAfter($end))
             ->where(fn (Builder $rows) => $rows
                 ->whereNull('expires_at')
                 ->orWhereColumn('revoked_at', '<=', 'expires_at'));

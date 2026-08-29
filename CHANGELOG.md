@@ -4,6 +4,24 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this package
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed: the last second of a period is inside the "active" figure
+
+The three event figures compare their window half-open — `< midnight` rather than
+`<= 23:59:59.999999` — because a query binding formats a date as `Y-m-d H:i:s` and drops the
+fraction. `Active` could not inherit that: a stock is asked *of an instant*, so it writes its own
+comparisons, and they were the inclusive kind.
+
+Two consequences, both silent and both only on engines that keep the fraction. A grant that began at
+23:59:59.500 on the closing day was counted by "granted" and missing from "active", on the same
+screen for the same period. And a grant whose `expires_at` or `revoked_at` fell in that same
+fraction was counted as gone by "expired"/"revoked" and still live by "active".
+
+The running balance had the third half of it: `whereBetween` is inclusive at the far end, so an
+arrival or a departure in the final second landed in no bucket at all and the chart disagreed with
+its own headline.
+
 ## [1.2.0] — 2026-08-29
 
 ### Added: this addon's figures appear in Insights
