@@ -21,4 +21,14 @@ parameters:
     excludePaths:
         - src/Bridges/ActivityBridge.php
 
+    # The analytics addon is a `suggest`, not a `require`: the metrics under
+    # src/Integrations/Insights extend its TableMetric and it is not in vendor.
+    # Scanned from the test stand-in — the same declarations, byte for byte —
+    # so the metrics are checked against the real signatures instead of being
+    # reported as unknown classes. Scanned, not analysed: the file is not code
+    # this package ships.
+    scanFiles:
+        - tests/Fakes/insights-contracts.php
+        - tests/Fakes/insights-table-metric.php
+
     treatPhpDocTypesAsCertain: false

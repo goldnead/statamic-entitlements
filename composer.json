@@ -37,6 +37,7 @@
     },
     "suggest": {
         "goldnead/statamic-activity": "Records grants, revocations and expiries into the activity ledger.",
+        "goldnead/statamic-insights": "Shows grants begun, withdrawn and expired, and the live holding, on the Insights dashboard.",
         "goldnead/statamic-leadhub": "Lets a CRM contact be the subject of a grant, not just a user.",
         "goldnead/statamic-automations": "Lets automations trigger on the four domain events this addon emits (planned)."
     },

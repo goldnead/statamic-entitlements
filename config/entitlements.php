@@ -70,6 +70,13 @@ return [
 
     'bridges' => [
         'activity' => true,
+
+        // Offers four figures — grants begun, withdrawn, expired, and the live
+        // holding — to goldnead/statamic-insights. Off means the figures are
+        // not registered at all, which is different from registering a zero:
+        // an installation that has the analytics addon for something else does
+        // not get four tiles it never asked for.
+        'insights' => true,
     ],
 
 ];

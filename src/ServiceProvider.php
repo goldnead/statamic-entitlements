@@ -5,15 +5,21 @@ namespace Goldnead\Entitlements;
 use Goldnead\Entitlements\Bridges\ActivityBridge;
 use Goldnead\Entitlements\Contracts\PackageResolver;
 use Goldnead\Entitlements\Contracts\SubjectResolver;
+use Goldnead\Entitlements\Integrations\Insights\Active;
+use Goldnead\Entitlements\Integrations\Insights\Expired;
+use Goldnead\Entitlements\Integrations\Insights\Granted;
+use Goldnead\Entitlements\Integrations\Insights\Revoked;
 use Goldnead\Entitlements\Query\Scopes\Filters;
 use Goldnead\Entitlements\Support\MorphSubjectResolver;
 use Goldnead\Entitlements\Support\NullPackageResolver;
 use Goldnead\Entitlements\Support\SourceRegistry;
+use Illuminate\Support\Facades\Log;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
 use Statamic\Providers\AddonServiceProvider;
 use Statamic\Query\Scopes\Scope;
 use Statamic\Statamic;
+use Throwable;
 
 class ServiceProvider extends AddonServiceProvider
 {
@@ -83,6 +89,7 @@ class ServiceProvider extends AddonServiceProvider
             ->bootNavigation()
             ->bootPermissions()
             ->bootActivityBridge()
+            ->bootInsightsMetrics()
             ->bootPublishables();
     }
 
@@ -213,6 +220,105 @@ class ServiceProvider extends AddonServiceProvider
 
         return $this;
     }
+
+    /**
+     * The metric handles this addon contributes, and the classes behind them.
+     *
+     * Handle and class both, so the registry can file the class name without
+     * building anything to find out what it is called — an installation with
+     * twenty addons would otherwise construct every metric of every one of them
+     * on a request that renders none.
+     *
+     * **The handles are frozen from the moment they are registered.** They end
+     * up in saved dashboards and in URLs; renaming one is a breaking change.
+     *
+     * @var array<class-string, string>
+     */
+    protected const INSIGHTS_METRICS = [
+        Granted::class => 'entitlements.granted',
+        Revoked::class => 'entitlements.revoked',
+        Expired::class => 'entitlements.expired',
+        Active::class => 'entitlements.active',
+    ];
+
+    /**
+     * Offer the four figures to the analytics addon, if it is there.
+     *
+     * Three call sites for one registration, for the same reason the activity
+     * bridge has three: Statamic invokes `bootAddon()` from inside a
+     * `Statamic::booted()` callback, and a nested `$app->booted()` written there
+     * fires *immediately* rather than later, because `Application::booted()`
+     * runs its callback at once when the app is already booted. So there is no
+     * single moment that is reliably late enough, and registering too early
+     * registers into nothing — an empty screen with no error anywhere, which is
+     * the worst shape this failure could take.
+     *
+     * {@see attachInsights()} is idempotent, so the retries cost nothing.
+     *
+     * **Nothing here throws, ever.** A missing, half-installed or mid-upgrade
+     * analytics addon must cost a few tiles on a screen nobody has open, never
+     * an access decision. The guards are the three that have each caught a real
+     * variation of "installed but not quite": the facade class may be absent,
+     * the container may refuse to build the manager, and an older release of the
+     * sibling may carry the facade without this method on it.
+     *
+     * The metric classes name the sibling's contract in their `extends` and
+     * their type hints, which is safe precisely because of the first guard: PHP
+     * loads a class when something touches it, and nothing touches these unless
+     * the facade exists. Hence `suggest` in composer.json rather than `require`.
+     */
+    protected function bootInsightsMetrics(): self
+    {
+        if ($this->attachInsights()) {
+            return $this;
+        }
+
+        $this->app->booted(fn () => $this->attachInsights());
+        Statamic::booted(fn () => $this->attachInsights());
+
+        return $this;
+    }
+
+    /** Whether the metrics are now registered. Safe to call any number of times. */
+    protected function attachInsights(): bool
+    {
+        if ($this->insightsRegistered) {
+            return true;
+        }
+
+        $facade = '\Goldnead\StatamicInsights\Facades\Insights';
+
+        if (! class_exists($facade)) {
+            return false;
+        }
+
+        try {
+            $manager = $facade::getFacadeRoot();
+
+            // Asked of the object, never of the facade: a facade forwards
+            // through `__callStatic` and declares none of what it forwards, so
+            // the probe on the facade class itself is always false. That is how
+            // a whole set of bridges in this family silently did nothing.
+            if (! is_object($manager) || ! method_exists($manager, 'registerMetric')) {
+                return false;
+            }
+
+            foreach (self::INSIGHTS_METRICS as $class => $handle) {
+                $manager->registerMetric($class, $handle);
+            }
+
+            $this->insightsRegistered = true;
+        } catch (Throwable $e) {
+            Log::warning('statamic-entitlements: the insights metrics could not be registered.', [
+                'exception' => $e->getMessage(),
+            ]);
+        }
+
+        return $this->insightsRegistered;
+    }
+
+    /** Set once the metrics have been handed over, so the retries stay free. */
+    protected bool $insightsRegistered = false;
 
     protected function bootPublishables(): self
     {
