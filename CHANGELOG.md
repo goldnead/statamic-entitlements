@@ -4,7 +4,14 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this package
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.1] — 2026-09-03
+
+### Fixed: revocation moved into the header menu, and an icon that did not exist
+
+`book-open-cover` is not a name in the set, so it rendered an empty box (it is
+`content-book-open`). Revocation stays a link to the form — the reason is mandatory and has no
+room in a dialog — but it now sits in the `…` menu instead of being a red button in the header.
+Core uses `danger` in exactly one place, the confirm button inside a modal.
 
 ### Fixed: the last second of a period is inside the "active" figure
 
