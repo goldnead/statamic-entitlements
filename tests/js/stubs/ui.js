@@ -58,6 +58,11 @@ export const Badge = textual('span', 'Badge');
 export const Card = container('div', 'Card');
 export const Description = container('p', 'Description');
 export const DocsCallout = textual('div', 'DocsCallout');
+// A destructive page action lives in the header's "…" menu, so the two
+// containers around DropdownItem have to exist here — otherwise the whole
+// subtree renders as nothing and a test looks for a link never drawn.
+export const Dropdown = container('div', 'Dropdown');
+export const DropdownMenu = container('div', 'DropdownMenu');
 export const DropdownItem = clickable('DropdownItem');
 export const Header = textual('header', 'Header');
 export const Heading = container('h2', 'Heading');

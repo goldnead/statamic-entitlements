@@ -67,7 +67,7 @@ const badgeColour = {
                     :description="__('entitlements::cp.empty_create_description')"
                 />
                 <EmptyStateItem
-                    icon="book-open-cover"
+                    icon="content-book-open"
                     :heading="__('entitlements::cp.empty_docs_heading')"
                     :description="__('entitlements::cp.empty_docs_description')"
                     href="https://github.com/goldnead/statamic-entitlements#readme"

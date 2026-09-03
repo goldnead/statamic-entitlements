@@ -62,7 +62,10 @@ describe('the entitlement detail screen', () => {
             .find((link) => link.attributes('href') === '/cp/entitlements/1/revoke');
 
         expect(revoke).toBeDefined();
-        expect(revoke.attributes('data-variant')).toBe('danger');
+        // `destructive`, not `danger`: core reserves `danger` for the confirm
+        // button inside a modal, so a destructive page action is a
+        // `DropdownItem variant="destructive"` in the header's "…" menu.
+        expect(revoke.attributes('data-variant')).toBe('destructive');
     });
 
     it('offers no revoke action to a user who may not revoke', () => {

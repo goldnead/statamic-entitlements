@@ -10,6 +10,9 @@ import {
     ConfirmationModal,
     Description,
     DocsCallout,
+    Dropdown,
+    DropdownItem,
+    DropdownMenu,
     Header,
     Heading,
     Panel,
@@ -71,7 +74,14 @@ const badgeColour = {
                     prioritize
                     v-slot="{ text, url }"
                 >
-                    <Button :href="url" :text="text" variant="danger" />
+                    <!-- In the "…" menu rather than carrying `variant="danger"`,
+                         which core reserves for the confirm button inside a
+                         modal. Dropdown renders its own dots trigger. -->
+                    <Dropdown>
+                        <DropdownMenu>
+                            <DropdownItem :href="url" :text="text" icon="key" variant="destructive" />
+                        </DropdownMenu>
+                    </Dropdown>
                 </CommandPaletteItem>
 
                 <Button
