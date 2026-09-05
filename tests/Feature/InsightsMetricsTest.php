@@ -647,39 +647,59 @@ class InsightsMetricsTest extends TestCase
         $this->assertSame(3, (new Revoked)->value($this->frage()));
     }
 
-    // -- The last fraction of the last second --------------------------------
+    // -- The last second of the window ---------------------------------------
+    //
+    // These three used to state their case half a second before midnight, which
+    // is the shape the defect actually had. The columns cannot hold it: they are
+    // `timestamp` without a precision, and MySQL *rounds* a written fraction to
+    // the nearest second rather than truncating it — `23:59:59.500` lands on the
+    // following midnight, in the next day, outside the window. SQLite keeps the
+    // string verbatim, so the same fixture meant two different instants on the
+    // two engines and the suite was red on MySQL only.
+    //
+    // So the fixtures were pulled onto `23:59:59`, the last instant these
+    // columns can hold, and what the three tests pin is the last *second* of the
+    // window rather than its last millisecond. That costs the first two their
+    // teeth: at second precision `<= 23:59:59` and `< midnight` select the same
+    // rows, so neither would fail against the old inclusive form. They are kept
+    // because the boundary itself is still worth stating. The third keeps its
+    // teeth in full — see the note there.
+    //
+    // Pinning the sub-second case again would take a column that stores
+    // fractions (`timestamp('starts_at', 3)`), i.e. a migration against a table
+    // that has shipped. Recorded here rather than done.
 
     /**
-     * A grant made at 23:59:59.500 on the closing day is inside the period.
+     * A grant made in the final second of the closing day is inside the period.
      *
-     * The bug this pins is the reason these metrics stopped writing their own
-     * window. `to` is 23:59:59.999999 and a binding formats a date as
+     * The bug behind this section is the reason these metrics stopped writing
+     * their own window. `to` is 23:59:59.999999 and a binding formats a date as
      * `Y-m-d H:i:s`, so the fraction is cut off: compared with `<=` against a
      * column that keeps milliseconds, every row in the final second of the
      * period fell out. Silently, and only on the engines that keep the
-     * fraction — a suite on second-precision data never sees it.
+     * fraction. {@see TableMetric::inPeriod()} compares `< midnight` instead,
+     * and midnight is the same instant at every precision.
      *
-     * {@see TableMetric::inPeriod()} compares
-     * `< midnight` instead, and midnight is the same instant at every precision.
-     * The row is written past the model's cast on purpose: the cast formats to
-     * whole seconds, so a fixture built through it could not state the case at
-     * all.
+     * On this table the two forms cannot disagree, so what is left here is the
+     * plain statement that the closing second belongs to the closing day and to
+     * its column — which a bound formatted as `Y-m-d`, or an off-by-one in the
+     * bucketing, would still break.
      *
      * The window closes on the 19th rather than on the 20th because the figure
      * is clamped to "now" as well, and now is midday on the 20th.
      */
     #[Test]
-    public function a_grant_in_the_last_fraction_of_the_final_second_is_counted(): void
+    public function a_grant_in_the_final_second_of_the_period_is_counted(): void
     {
         $this->grant('mittag', product: 'kurs-a', source: 'manual', startsAt: '2026-08-19 12:00:00');
-        $this->rawGrant('kurz-vor-zwoelf', startsAt: '2026-08-19 23:59:59.500');
+        $this->grant('kurz-vor-zwoelf', product: 'kurs-a', source: 'manual', startsAt: '2026-08-19 23:59:59');
 
         $tag = new MetricQuery(Period::between(
             Carbon::parse('2026-08-19 00:00:00', 'UTC'),
             Carbon::parse('2026-08-19 23:59:59', 'UTC'),
         ));
 
-        $this->assertSame(2, (new Granted)->value($tag), 'the grant half a second before midnight is inside the day');
+        $this->assertSame(2, (new Granted)->value($tag), 'the grant in the last second of the day is inside the day');
         $this->assertSame(['2026-08-19' => 2], (new Granted)->series($tag), 'and it is in the day\'s column, not in the next one');
     }
 
@@ -689,17 +709,19 @@ class InsightsMetricsTest extends TestCase
      * The three event figures beside this one go through
      * {@see TableMetric::inPeriod()} and were repaired there. This one cannot:
      * a stock is asked *of an instant*, so it writes its own comparisons — and
-     * they were the inclusive kind. A grant that began at 23:59:59.500 on the
-     * closing day was therefore counted by "granted" and missing from
+     * they were the inclusive kind. A grant that began in the last fraction of
+     * the closing day was therefore counted by "granted" and missing from
      * "active", on the same screen, for the same period.
      *
-     * The row is written past the model's cast on purpose: the cast formats to
-     * whole seconds, so through it the case cannot be stated at all.
+     * At second precision the two comparisons agree on this row, so this test
+     * states the agreement rather than catching its absence: whatever "granted"
+     * counts as having begun inside the day, "active" has to still hold at the
+     * close of it.
      */
     #[Test]
-    public function a_grant_beginning_in_the_last_fraction_of_the_final_second_is_live_at_the_close(): void
+    public function a_grant_beginning_in_the_final_second_is_live_at_the_close(): void
     {
-        $this->rawGrant('kurz-vor-zwoelf', startsAt: '2026-08-19 23:59:59.500');
+        $this->grant('kurz-vor-zwoelf', product: 'kurs-a', source: 'manual', startsAt: '2026-08-19 23:59:59');
 
         $tag = new MetricQuery(Period::between(
             Carbon::parse('2026-08-19 00:00:00', 'UTC'),
@@ -716,9 +738,15 @@ class InsightsMetricsTest extends TestCase
      *
      * The mirror of the case above, and the one that would have read as an
      * over-count rather than an under-count: compared inclusively, a grant
-     * whose `expires_at` or `revoked_at` fell in the final fraction was still
+     * whose `expires_at` or `revoked_at` fell in the closing second was still
      * live at the close — while the "expired" and "revoked" figures beside it,
      * which inherit their window, already counted it as gone.
+     *
+     * This is the one of the three that still fails against the old form, and
+     * it does so at second precision: {@see Active::liveAt()} asks
+     * `expires_at >= justAfter(T)`, and a departure at exactly T is inside the
+     * old inclusive `>= T` and outside the half-open `>= T + 1s`. Nothing about
+     * it depends on a fraction the column cannot hold.
      *
      * Two rows rather than one, because the departures are two disjoint
      * queries: `LEAST()` is spelled differently in every dialect, so a row
@@ -726,10 +754,10 @@ class InsightsMetricsTest extends TestCase
      * separately, and a repair to one is not a repair to the other.
      */
     #[Test]
-    public function a_grant_ending_in_the_last_fraction_of_the_final_second_has_left_the_close(): void
+    public function a_grant_ending_in_the_final_second_has_left_the_close(): void
     {
-        $this->rawGrant('laeuft-ab', startsAt: '2026-08-18 09:00:00', expiresAt: '2026-08-19 23:59:59.500');
-        $this->rawGrant('zurueckgezogen', startsAt: '2026-08-18 09:00:00', revokedAt: '2026-08-19 23:59:59.500');
+        $this->grant('laeuft-ab', product: 'kurs-a', source: 'manual', startsAt: '2026-08-18 09:00:00', expiresAt: '2026-08-19 23:59:59');
+        $this->grant('zurueckgezogen', product: 'kurs-a', source: 'manual', startsAt: '2026-08-18 09:00:00', revokedAt: '2026-08-19 23:59:59');
 
         $fenster = new MetricQuery(Period::between(
             Carbon::parse('2026-08-18 00:00:00', 'UTC'),
@@ -745,37 +773,6 @@ class InsightsMetricsTest extends TestCase
             (new Active)->series($fenster),
             'both arrive on the 18th and both leave on the 19th, which is a level of zero and therefore no column',
         );
-    }
-
-    /**
-     * One row written straight to the table, so a sub-second timestamp survives.
-     *
-     * {@see grant()} goes through the model, which is the right way to build a
-     * fixture and the wrong way to state this case: the UTC cast formats to
-     * whole seconds and the fraction would be gone before it reached the
-     * database.
-     */
-    protected function rawGrant(
-        string $ref,
-        string $startsAt,
-        ?string $expiresAt = null,
-        ?string $revokedAt = null,
-        int $brandId = 1,
-    ): void {
-        DB::table('entitlements')->insert([
-            'brand_id' => $brandId,
-            'subject_type' => 'user',
-            'subject_id' => $ref,
-            'product_slug' => 'kurs-a',
-            'source' => 'manual',
-            'source_ref' => $ref,
-            'status' => ($revokedAt === null ? EntitlementState::Active : EntitlementState::Revoked)->value,
-            'starts_at' => $startsAt,
-            'expires_at' => $expiresAt,
-            'revoked_at' => $revokedAt,
-            'created_at' => $startsAt,
-            'updated_at' => $startsAt,
-        ]);
     }
 
     // -- Across brands --------------------------------------------------------

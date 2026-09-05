@@ -4,6 +4,8 @@ namespace Goldnead\Entitlements\Query\Scopes\Filters;
 
 use Goldnead\Entitlements\Enums\EntitlementState;
 use Goldnead\Entitlements\Support\StateResolver;
+use Illuminate\Database\Eloquent\Builder;
+use InvalidArgumentException;
 
 /**
  * Filters by resolved state, not by the `status` column.
@@ -49,6 +51,21 @@ class State extends EntitlementFilter
 
         if (! $state) {
             return;
+        }
+
+        // `Scope::apply()` documents its first argument as
+        // `Statamic\Query\Builder`, because that is what a filter over entries,
+        // assets or users receives. This one is never offered to those listings
+        // — {@see EntitlementFilter::visibleTo()} pins it to the entitlements
+        // listing, and {@see EntitlementController::listing()} builds that with
+        // `Entitlement::query()`. The parameter type cannot be narrowed on an
+        // override without breaking the contract in the other direction, so the
+        // invariant is asserted here instead: loudly, because a filter that
+        // silently returned everything would read as "no rows match" on screen.
+        if (! $query instanceof Builder) {
+            throw new InvalidArgumentException(
+                'The state filter resolves against the entitlements table and needs an Eloquent builder, got '.get_debug_type($query).'.'
+            );
         }
 
         StateResolver::constrain($query, $state);
