@@ -59,7 +59,7 @@
             "description": "Who may access what, with one state machine and a real audit of revocation.",
             "url": "https://github.com/goldnead/statamic-entitlements",
             "developer": "Adrian Goldner",
-            "developer-url": "https://gldnr.studio"
+            "developer-url": "https://adriangoldner.dev"
         },
         "laravel": {
             "providers": [
