@@ -2,6 +2,7 @@
 
 namespace Goldnead\Entitlements;
 
+use Goldnead\BrandContext\Settings\SettingsRegistry;
 use Goldnead\Entitlements\Bridges\ActivityBridge;
 use Goldnead\Entitlements\Contracts\PackageResolver;
 use Goldnead\Entitlements\Contracts\SubjectResolver;
@@ -12,6 +13,7 @@ use Goldnead\Entitlements\Integrations\Insights\Revoked;
 use Goldnead\Entitlements\Query\Scopes\Filters;
 use Goldnead\Entitlements\Support\MorphSubjectResolver;
 use Goldnead\Entitlements\Support\NullPackageResolver;
+use Goldnead\Entitlements\Support\Settings;
 use Goldnead\Entitlements\Support\SourceRegistry;
 use Illuminate\Support\Facades\Log;
 use Statamic\Facades\CP\Nav;
@@ -79,6 +81,22 @@ class ServiceProvider extends AddonServiceProvider
         if ($this->app->resolved('translator')) {
             $this->app['translator']->addNamespace('entitlements', $langPath);
         }
+    }
+
+    /**
+     * In `boot()`, nicht in `bootAddon()`, und das ist keine Stilfrage.
+     *
+     * brand-context legt die gespeicherten Werte aus einem `app->booted()` auf
+     * die Config, absichtlich erst dann, damit jedes Provider-`boot()` seine
+     * Anmeldung hinter sich hat. `bootAddon()` läuft selbst aus einem
+     * `app->booted()` (Statamics AddonServiceProvider), und welches der beiden
+     * zuerst feuert, hängt an der Ladereihenfolge der Pakete.
+     */
+    public function boot(): void
+    {
+        parent::boot();
+
+        $this->app->make(SettingsRegistry::class)->register(Settings::class);
     }
 
     public function bootAddon(): void
@@ -189,6 +207,12 @@ class ServiceProvider extends AddonServiceProvider
                         Permission::make('revoke entitlements')
                             ->label(__('entitlements::cp.permission_revoke')),
                     ]);
+
+                // Eigenes Recht, nicht als Kind von `view entitlements`: wer
+                // Freigaben ansehen darf, darf deshalb noch nicht die
+                // Betriebswerte des Addons verstellen.
+                Permission::register('manage entitlements settings')
+                    ->label(__('entitlements::settings.permission_manage'));
             });
         });
 
