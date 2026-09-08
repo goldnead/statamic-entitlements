@@ -4,6 +4,40 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this package
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] — 2026-09-07
+
+### Neu: drei Werte im Control Panel
+
+Unter **Einstellungen → Addon-Einstellungen** steht ein Abschnitt für dieses Addon, mit zwei
+Gruppen:
+
+- **Control Panel:** die Zeilen je Listenseite, und die erlaubten Subjekt-Typen. Steht bei den
+  Typen etwas, bietet das Formular für eine Freigabe von Hand nur noch diese an; leer heißt
+  freier Text, und ein Tippfehler erzeugt dann eine Freigabe, die niemandem gehört und erst
+  auffällt, wenn sich jemand beschwert.
+- **Nachbar-Addons:** ob die vier Kennzahlen an Insights gemeldet werden. Aus heißt, sie
+  erscheinen dort gar nicht — was etwas anderes ist als eine Null.
+
+Gespeichert wird nur die Abweichung, alles andere folgt weiter `config/entitlements.php`.
+
+Nicht auf der Seite, und die Gruppentexte sagen es: `cp.enabled` wird beim Registrieren der
+Routen und beim Aufbau der Navigation gelesen. `bridges.activity` ist schlimmer als nur zu spät,
+denn die Brücke merkt sich in einer statischen Eigenschaft, dass sie eingehängt hat; ein
+späteres „aus" löst die Listener nicht wieder. `sources` ist eine Abbildung Handle auf
+Anzeigename und außerdem keine Whitelist: eine nicht eingetragene Quelle schreibt und gewährt
+genauso, sie zeigt nur ihr rohes Handle. Und `manual.source` steht als Wert in der
+`source`-Spalte jeder von Hand geschriebenen Zeile — ihn zu ändern trennt die neuen Zeilen von
+den bestehenden ab, ohne an diesen etwas zu ändern.
+
+**Neues Recht `manage entitlements settings`.** Es hat zunächst niemand, und bis es einer Rolle
+zugewiesen ist, bleibt der Abschnitt unsichtbar. Die drei bestehenden Rechte sind unverändert.
+
+**Voraussetzung: `goldnead/statamic-brand-context` ab 1.13.** Ältere Fassungen zeigen die Seite,
+wenden ihre Werte aber nicht verlässlich an: auf einer Installation mit einer einzigen Marke
+kamen die Einstellungen der zuletzt angemeldeten Addons gar nicht an der Config an, und bis 1.12
+löschte ein zweites Speichern desselben Abschnitts die Überschreibung des ersten, ohne Meldung.
+Wer vor dem Update Werte gesetzt hat, prüft danach, ob sie noch dastehen.
+
 ## [1.2.1] — 2026-09-03
 
 ### Fixed: revocation moved into the header menu, and an icon that did not exist
