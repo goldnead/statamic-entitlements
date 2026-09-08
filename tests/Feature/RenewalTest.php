@@ -63,15 +63,22 @@ it('never shortens a window somebody paid for', function () {
     Event::assertNotDispatched(EntitlementRenewed::class);
 });
 
+/**
+ * Relative Daten, nicht feste — `grace_until` wird gegen `now()` verglichen
+ * (`src/Casts/UtcDateTime.php:14`). Mit `2026-09-08 00:00` als Gnadenfrist war
+ * dieser Test eine Zeitbombe: er lief bis zum 07.09.2026 grün und war am
+ * 08.09.2026 rot, ohne dass jemand etwas geändert hatte. Der Rest der Suite
+ * rechnet ohnehin relativ (`GrantEventsTest.php:52`).
+ */
 it('lifts a grace period, because payment is what it was waiting for', function () {
     $grant = Entitlements::grant($this->subject, 'mitgliedschaft', 'payments', 'tr_1',
-        expiresAt: CarbonImmutable::parse('2026-09-01 00:00', 'UTC'));
+        expiresAt: CarbonImmutable::now()->subWeek());
 
-    Entitlements::enterGracePeriod($grant, CarbonImmutable::parse('2026-09-08 00:00', 'UTC'));
+    Entitlements::enterGracePeriod($grant, CarbonImmutable::now()->addWeek());
 
     expect($grant->fresh()->state())->toBe(EntitlementState::GracePeriod);
 
-    Entitlements::renew($this->subject, 'mitgliedschaft', CarbonImmutable::parse('2026-10-01 00:00', 'UTC'));
+    Entitlements::renew($this->subject, 'mitgliedschaft', CarbonImmutable::now()->addMonth());
 
     expect($grant->fresh()->state())->toBe(EntitlementState::Active)
         ->and($grant->fresh()->grace_until)->toBeNull();
