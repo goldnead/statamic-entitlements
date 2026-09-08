@@ -6,37 +6,35 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.3.0] — 2026-09-07
 
-### Neu: drei Werte im Control Panel
+### New: three values in the Control Panel
 
-Unter **Einstellungen → Addon-Einstellungen** steht ein Abschnitt für dieses Addon, mit zwei
-Gruppen:
+Under **Settings → Addon Settings** there is a section for this addon, with two groups:
 
-- **Control Panel:** die Zeilen je Listenseite, und die erlaubten Subjekt-Typen. Steht bei den
-  Typen etwas, bietet das Formular für eine Freigabe von Hand nur noch diese an; leer heißt
-  freier Text, und ein Tippfehler erzeugt dann eine Freigabe, die niemandem gehört und erst
-  auffällt, wenn sich jemand beschwert.
-- **Nachbar-Addons:** ob die vier Kennzahlen an Insights gemeldet werden. Aus heißt, sie
-  erscheinen dort gar nicht — was etwas anderes ist als eine Null.
+- **Control Panel:** the rows per listing page, and the permitted subject types. If anything is
+  entered for the types, the manual grant form offers only those; empty means free text, and a
+  typo then creates a grant that belongs to nobody and only surfaces once somebody complains.
+- **Neighbouring addons:** whether the four figures are reported to Insights. Off means they do
+  not appear there at all — which is something other than a zero.
 
-Gespeichert wird nur die Abweichung, alles andere folgt weiter `config/entitlements.php`.
+Only the deviation is stored, everything else still follows `config/entitlements.php`.
 
-Nicht auf der Seite, und die Gruppentexte sagen es: `cp.enabled` wird beim Registrieren der
-Routen und beim Aufbau der Navigation gelesen. `bridges.activity` ist schlimmer als nur zu spät,
-denn die Brücke merkt sich in einer statischen Eigenschaft, dass sie eingehängt hat; ein
-späteres „aus" löst die Listener nicht wieder. `sources` ist eine Abbildung Handle auf
-Anzeigename und außerdem keine Whitelist: eine nicht eingetragene Quelle schreibt und gewährt
-genauso, sie zeigt nur ihr rohes Handle. Und `manual.source` steht als Wert in der
-`source`-Spalte jeder von Hand geschriebenen Zeile — ihn zu ändern trennt die neuen Zeilen von
-den bestehenden ab, ohne an diesen etwas zu ändern.
+Not on the page, and the group texts say so: `cp.enabled` is read while the routes are
+registered and while the navigation is built. `bridges.activity` is worse than merely late,
+because the bridge remembers in a static property that it has attached; a later "off" does not
+detach the listeners again. `sources` is a mapping from handle to display name and is not a
+whitelist either: a source that is not listed writes and grants just the same, it only shows its
+raw handle. And `manual.source` is the value in the `source` column of every row written by
+hand — changing it separates the new rows from the existing ones without changing anything about
+those.
 
-**Neues Recht `manage entitlements settings`.** Es hat zunächst niemand, und bis es einer Rolle
-zugewiesen ist, bleibt der Abschnitt unsichtbar. Die drei bestehenden Rechte sind unverändert.
+**New permission `manage entitlements settings`.** Nobody holds it at first, and until it is
+assigned to a role the section stays invisible. The three existing permissions are unchanged.
 
-**Voraussetzung: `goldnead/statamic-brand-context` ab 1.13.** Ältere Fassungen zeigen die Seite,
-wenden ihre Werte aber nicht verlässlich an: auf einer Installation mit einer einzigen Marke
-kamen die Einstellungen der zuletzt angemeldeten Addons gar nicht an der Config an, und bis 1.12
-löschte ein zweites Speichern desselben Abschnitts die Überschreibung des ersten, ohne Meldung.
-Wer vor dem Update Werte gesetzt hat, prüft danach, ob sie noch dastehen.
+**Requires `goldnead/statamic-brand-context` 1.13 or later.** Older versions show the page but
+do not apply its values reliably: on an installation with a single brand the settings of the
+addons registered last did not reach the config at all, and up to 1.12 a second save of the same
+section deleted the first save's override without a message. If you set values before the
+update, check afterwards whether they are still there.
 
 ## [1.2.1] — 2026-09-03
 
