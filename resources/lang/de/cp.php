@@ -35,6 +35,9 @@ return [
 
     'empty_heading' => 'Es wurde noch nichts vergeben. Eine Berechtigung hält fest, dass ein Subjekt ein Produkt nutzen darf, woher diese Erlaubnis kommt und wie lange sie gilt.',
     'empty_create_description' => 'Zugriff von Hand vergeben, mit Quelle und nachvollziehbarer Spur.',
+    'setup_required_heading' => 'Diese Seite braucht ihre Datenbanktabellen, und die gibt es noch nicht.',
+    'setup_required_description' => 'Führe `php artisan migrate` aus, danach lädt die Seite normal. Der Grund steht auch im Log.',
+
     'empty_docs_heading' => 'Dokumentation lesen',
     'empty_docs_description' => 'Die Zustandslogik, die vier Events und die Erweiterungspunkte.',
 

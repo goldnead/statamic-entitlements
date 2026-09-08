@@ -8,6 +8,7 @@ use Goldnead\Entitlements\Enums\EntitlementState;
 use Goldnead\Entitlements\Models\Entitlement;
 use Goldnead\Entitlements\Query\Scopes\Filters\EntitlementFilter;
 use Goldnead\Entitlements\Support\Blueprints;
+use Goldnead\Entitlements\Support\Setup;
 use Goldnead\Entitlements\Support\SourceRegistry;
 use Goldnead\Entitlements\Support\SubjectReference;
 use Goldnead\IdentityContracts\Identity;
@@ -65,6 +66,12 @@ class EntitlementController extends Controller
     public function index(FilteredRequest $request)
     {
         Gate::authorize('view entitlements');
+
+        // Before the branch, so the listing's own XHR is guarded too — it hits
+        // the same table and would answer 500 behind a page that rendered fine.
+        if ($setup = Setup::guard(__('entitlements::cp.nav'), 'entitlements')) {
+            return $setup;
+        }
 
         if ($request->wantsJson()) {
             return $this->listing($request);

@@ -35,6 +35,9 @@ return [
 
     'empty_heading' => 'Nothing has been granted yet. An entitlement records that one subject may use one product, where that permission came from and for how long.',
     'empty_create_description' => 'Grant access to a product by hand, with a source and an audit trail.',
+    'setup_required_heading' => 'This page needs its database tables, and they are not there yet.',
+    'setup_required_description' => 'Run `php artisan migrate` and the page loads as usual. The reason is in the log as well.',
+
     'empty_docs_heading' => 'Read the documentation',
     'empty_docs_description' => 'The state machine, the four events and the extension points.',
 

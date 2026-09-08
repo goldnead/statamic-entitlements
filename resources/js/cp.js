@@ -2,6 +2,7 @@ import { inertia } from '@statamic/cms/api';
 
 import Index from './pages/Entitlements/Index.vue';
 import Show from './pages/Entitlements/Show.vue';
+import SetupRequired from './pages/SetupRequired.vue';
 
 /*
  * Addon Inertia pages are resolved by name after core's own pages have been
@@ -16,4 +17,5 @@ import Show from './pages/Entitlements/Show.vue';
 Statamic.booting(() => {
     inertia.register('entitlements::Entitlements/Index', Index);
     inertia.register('entitlements::Entitlements/Show', Show);
+    inertia.register('entitlements::SetupRequired', SetupRequired);
 });
