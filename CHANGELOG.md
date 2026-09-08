@@ -4,6 +4,17 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this package
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] — 2026-09-08
+
+### Fixed
+
+- `/cp/entitlements` answered HTTP 500 on an install whose migrations had never run. It now
+  shows an empty state naming the missing table and what to run, and writes the reason to the
+  log. The JSON branch the listing fetches is covered by the same check.
+- A test pinned the grace period to a fixed calendar date and compared it against `now()`, so it
+  turned red on 08.09.2026 without anything changing. It works in relative dates now, like the
+  rest of the suite.
+
 ## [1.3.0] — 2026-09-07
 
 ### New: three values in the Control Panel
