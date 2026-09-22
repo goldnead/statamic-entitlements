@@ -23,29 +23,38 @@ it('registers itself with the shared settings layer', function () {
         ->and($registry->permission('entitlements'))->toBe('manage entitlements settings');
 });
 
-it('turns the manual grant form into a select once subject types are saved', function () {
+it('turns the manual grant form into a select from the config, not from the settings screen', function () {
     // Vorher: freies Textfeld, weil nichts eingetragen ist.
-    $field = Blueprints::grant()->field('subject_type')->config();
+    expect(Blueprints::grant()->field('subject_type')->config()['type'])->toBe('text');
 
-    expect($field['type'])->toBe('text');
+    // Der Wert wohnt in `config/`, in beiden Formen: flache Liste ODER
+    // Zuordnung Typ => Beschriftung.
+    config()->set('entitlements.manual.subject_types', [
+        'user' => 'Mitglied',
+        'contact' => 'Kontakt',
+    ]);
 
-    BrandSettings::for('entitlements')->save(['manual.subject_types' => ['user', 'contact']]);
-
-    // Nachher: Auswahlfeld mit genau diesen beiden Typen. Das ist die Grenze,
-    // die zaehlt — die Config allein belegt nur den halben Weg.
     $field = Blueprints::grant()->field('subject_type')->config();
 
     expect($field['type'])->toBe('select')
         ->and(array_keys($field['options']))->toBe(['user', 'contact']);
 });
 
-it('keeps a saved list of subject types as strings', function () {
-    // Die Schicht wandelt Listeneintraege sonst nicht, und ein "42" statt 42
-    // waere hier egal — ein 42 statt "42" nicht: der Morph-Typ ist ein
-    // Schluessel in `options` und wuerde zur Zahl.
+it('does not offer the subject types on the settings screen', function () {
+    // Weil der Wert eine Zuordnung sein darf und die Schicht dafuer keinen Typ
+    // hat: als `list` deklariert reichte er ein Objekt an die Seite, das
+    // `join()` dort starb, und die Einstellungsseite ALLER Addons blieb weiss.
+    // Gemessen 22.09.2026 auf staging.adriangoldner.com.
+    $keys = collect(Settings::settingsGroups())
+        ->flatMap(fn (array $group) => array_column($group['fields'], 'key'));
+
+    expect($keys)->not->toContain('manual.subject_types');
+
+    // Und eine Zeile aus einer aelteren Version darf den Wert nicht mehr
+    // setzen — die Schicht wendet nur an, was das Addon heute anbietet.
     BrandSettings::for('entitlements')->save(['manual.subject_types' => ['user']]);
 
-    expect(config('entitlements.manual.subject_types'))->toBe(['user']);
+    expect(config('entitlements.manual.subject_types'))->toBe([]);
 });
 
 it('puts a saved page size onto the config the listing reads', function () {

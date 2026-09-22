@@ -4,6 +4,19 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this package
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `manual.subject_types` steht nicht mehr auf der Einstellungsseite der Suite. Der Wert darf
+  eine flache Liste **oder** eine Zuordnung `Typ => Beschriftung` sein (`Blueprints` liest
+  beide); die Einstellungs-Schicht kennt keinen Typ fuer eine Zuordnung, und als `list`
+  deklariert reichte er auf einer Site mit Zuordnung ein Objekt an die Oberflaeche — das
+  `join()` dort starb und nahm die Einstellungsseite **aller** Addons mit. Zuordnungen bleiben
+  in `config/`, so entschieden am 07.09.2026. Wer den Wert bisher ueber das Control Panel
+  gespeichert hatte, traegt ihn in `config/entitlements.php` nach: eine Zeile aus einer
+  aelteren Version wird nicht mehr angewandt.
+
 ## [1.4.0] — 2026-09-08
 
 ### Fixed

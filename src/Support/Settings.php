@@ -63,7 +63,22 @@ class Settings implements ProvidesSettings
                 'description' => __('entitlements::settings.groups.cp.description'),
                 'fields' => [
                     static::field('cp.per_page', 'integer', ['min' => 1]),
-                    static::field('manual.subject_types', 'list'),
+                    // `manual.subject_types` gehoert NICHT auf die Seite.
+                    //
+                    // Der Wert darf beides sein: eine flache Liste von
+                    // Morph-Typen ODER eine Zuordnung Typ => Beschriftung
+                    // (Blueprints::subjectTypeField() liest beide). Die
+                    // Einstellungs-Schicht kennt keinen Typ fuer eine
+                    // Zuordnung, und als `list` deklariert reichte sie auf
+                    // einer Site mit Zuordnung ein Objekt an die Seite: das
+                    // `join()` dort starb, und mit ihm die
+                    // Einstellungsseite ALLER Addons (weiss, nur ein Fehler
+                    // in der Browserkonsole). Gemessen 22.09.2026 auf
+                    // staging.adriangoldner.com.
+                    //
+                    // Zuordnungen bleiben in `config/`, so entschieden am
+                    // 07.09.2026 fuer `invoices.tax.zones` und drei weitere.
+                    // Die Seite nennt den Config-Pfad ohnehin.
                 ],
             ],
             [
