@@ -8,6 +8,11 @@ parameters:
     # grow.
     level: 5
 
+    # Registers the addon's view namespace, which no provider does during the
+    # analysis. Reason in the file header.
+    bootstrapFiles:
+        - phpstan-bootstrap.php
+
     paths:
         - src
         - database

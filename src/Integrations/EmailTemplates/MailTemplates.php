@@ -197,9 +197,7 @@ class MailTemplates
 
         return [
             'subject' => static::merge($default['subject'], $variables, escape: false),
-            // Through the container key: the namespace is registered at
-            // runtime, which static analysis of view names cannot see.
-            'html' => app('view')->make(self::LAYOUT, [
+            'html' => view(self::LAYOUT, [
                 'body' => static::merge($default['body'], $variables),
                 'preview' => static::merge($default['preview'], $variables, escape: false),
             ])->render(),
