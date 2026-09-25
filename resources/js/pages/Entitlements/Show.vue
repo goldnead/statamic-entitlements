@@ -17,6 +17,12 @@ import {
     Heading,
     Panel,
     PanelHeader,
+    Table,
+    TableCell,
+    TableColumn,
+    TableColumns,
+    TableRow,
+    TableRows,
 } from '@statamic/cms/ui';
 
 const props = defineProps({
@@ -27,9 +33,27 @@ const props = defineProps({
     restoreUrl: { type: String, required: true },
     canRevoke: { type: Boolean, default: false },
     canRestore: { type: Boolean, default: false },
+    quotas: { type: Array, default: () => [] },
+    limitsUrl: { type: String, default: null },
+    resetUrl: { type: String, default: null },
 });
 
 const restoring = ref(false);
+
+// The counter somebody asked to reset, while the confirmation is open.
+const resetting = ref(null);
+
+function confirmReset() {
+    router.post(props.resetUrl, { ...resetting.value.reset, redirect: window.location.href }, { preserveScroll: true });
+    resetting.value = null;
+}
+
+function quotaLimit(quota) {
+    if (quota.source === 'none') return __('entitlements::cp.quota_none');
+    if (quota.unlimited) return __('entitlements::cp.limits_unlimited');
+
+    return String(quota.limit);
+}
 
 // Every mutation goes through the Inertia router, never axios: the router owns
 // the progress bar, the flash toast, the dirty-state guard and back-button
@@ -186,6 +210,79 @@ const badgeColour = {
                 </Card>
             </Panel>
         </div>
+
+        <!-- The subject's limits as they apply now, across all its grants and the
+             subjects it acts for, because "how many are left" is the question. -->
+        <Panel v-if="quotas.length || limitsUrl" class="mt-6" data-panel="quotas">
+            <PanelHeader class="flex items-center justify-between min-h-10">
+                <Heading>{{ __('entitlements::cp.quotas') }}</Heading>
+                <Button v-if="limitsUrl" size="sm" variant="ghost" :href="limitsUrl" :text="__('entitlements::cp.limits_title')" />
+            </PanelHeader>
+
+            <Card v-if="quotas.length === 0">
+                <Description>{{ __('entitlements::cp.quotas_none') }}</Description>
+            </Card>
+
+            <Table v-else>
+                <TableColumns>
+                    <TableColumn>{{ __('entitlements::cp.limits_col_key') }}</TableColumn>
+                    <TableColumn>{{ __('entitlements::cp.quota_col_limit') }}</TableColumn>
+                    <TableColumn>{{ __('entitlements::cp.quota_col_used') }}</TableColumn>
+                    <TableColumn>{{ __('entitlements::cp.quota_col_remaining') }}</TableColumn>
+                    <TableColumn>{{ __('entitlements::cp.quota_col_until') }}</TableColumn>
+                    <TableColumn>{{ __('entitlements::cp.quota_col_from') }}</TableColumn>
+                    <TableColumn />
+                </TableColumns>
+                <TableRows>
+                    <TableRow v-for="quota in quotas" :key="quota.key" :data-key="quota.key">
+                        <TableCell>
+                            <div class="font-medium">{{ quota.label }}</div>
+                            <code v-if="quota.label !== quota.key" class="text-2xs text-gray-600 dark:text-gray-400">{{ quota.key }}</code>
+                        </TableCell>
+                        <TableCell class="tabular-nums">{{ quotaLimit(quota) }}</TableCell>
+                        <TableCell class="tabular-nums">
+                            <span v-if="quota.used !== null">{{ quota.used }}</span>
+                            <span v-else class="text-xs text-gray-500 dark:text-gray-400">{{ __('entitlements::cp.quota_stock_uncounted') }}</span>
+                        </TableCell>
+                        <TableCell class="tabular-nums">
+                            <Badge
+                                v-if="quota.remaining !== null && quota.source !== 'none'"
+                                pill
+                                :color="quota.remaining === 0 ? 'red' : 'green'"
+                                :text="String(quota.remaining)"
+                            />
+                            <span v-else class="text-gray-500 dark:text-gray-400">&mdash;</span>
+                        </TableCell>
+                        <TableCell class="whitespace-nowrap font-mono text-xs">{{ quota.period_end || '—' }}</TableCell>
+                        <TableCell>
+                            <span v-if="quota.source === 'grant'" class="font-mono text-xs">{{ quota.product }}</span>
+                            <span v-else-if="quota.source === 'fallback'" class="text-xs">{{ __('entitlements::cp.quota_fallback') }}: <span class="font-mono">{{ quota.product }}</span></span>
+                            <span v-else class="text-xs text-gray-500 dark:text-gray-400">&mdash;</span>
+                            <div v-if="quota.held_elsewhere" class="text-2xs text-gray-600 dark:text-gray-400">
+                                {{ __('entitlements::cp.quota_held_by', { holder: quota.holder_label }) }}
+                            </div>
+                        </TableCell>
+                        <TableCell class="text-right">
+                            <Button
+                                v-if="quota.can_reset"
+                                size="sm"
+                                :text="__('entitlements::cp.usage_reset')"
+                                @click="resetting = quota"
+                            />
+                        </TableCell>
+                    </TableRow>
+                </TableRows>
+            </Table>
+        </Panel>
+
+        <ConfirmationModal
+            :open="resetting !== null"
+            :title="__('entitlements::cp.usage_reset_confirm_title')"
+            :body-text="__('entitlements::cp.usage_reset_confirm_body')"
+            :button-text="__('entitlements::cp.usage_reset')"
+            @update:open="(open) => { if (!open) resetting = null; }"
+            @confirm="confirmReset"
+        />
 
         <!-- Core's overlay, not a hand-built one: it participates in the portal
              stack, the esc-key binding stack and FocusScope trapping. -->

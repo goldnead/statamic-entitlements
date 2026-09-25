@@ -68,7 +68,9 @@ class QuotaManager
         $quota = $this->resolve($subject, $key);
 
         if ($quota->kind === Quota::KIND_STOCK) {
-            return $quota->withUsed($current);
+            // Without a count from the caller, the last one withinLimit() was
+            // told, or nothing: this addon does not count a stock itself.
+            return $quota->withUsed($current ?? ($this->catalog->ready() ? $this->findCounter($quota)?->used : null));
         }
 
         return $quota->withUsed($this->readUsed($quota));
@@ -494,11 +496,13 @@ class QuotaManager
 
     private function readUsed(Quota $quota): int
     {
-        if ($quota->holder === null || ! $this->ready()) {
+        // Silent on purpose: a read before the migration ran answers 0, and
+        // only a write that cannot happen is worth a log line.
+        if ($quota->holder === null || ! $this->catalog->ready()) {
             return 0;
         }
 
-        return (int) ($this->findCounter($quota)?->used ?? 0);
+        return (int) ($this->findCounter($quota)->used ?? 0);
     }
 
     private function findCounter(Quota $quota): ?Usage

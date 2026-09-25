@@ -151,6 +151,9 @@ it('answers a stock limit from the caller\'s count and announces it full once', 
     expect(Entitlements::withinLimit($this->anna, 'arrangements', 2))->toBeTrue();
     Event::assertDispatchedTimes(LimitReached::class, 1);
 
+    // Read without a count: the last count reported, for the Control Panel.
+    expect(Entitlements::quota($this->anna, 'arrangements')->used)->toBe(2);
+
     // Full now; asking again refuses and does not announce again.
     expect(Entitlements::withinLimit($this->anna, 'arrangements', 3))->toBeFalse()
         ->and(Entitlements::withinLimit($this->anna, 'arrangements', 3))->toBeFalse();

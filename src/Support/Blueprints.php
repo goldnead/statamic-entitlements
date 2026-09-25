@@ -2,6 +2,7 @@
 
 namespace Goldnead\Entitlements\Support;
 
+use Goldnead\Entitlements\Limits\LimitCatalog;
 use Statamic\Facades\Blueprint;
 use Statamic\Fields\Blueprint as BlueprintInstance;
 
@@ -144,6 +145,103 @@ class Blueprints
                                     ],
                                 ],
                             ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+    }
+
+    /**
+     * The limits of one product: a grid of key, number and period.
+     *
+     * "Unlimited" is its own toggle rather than an empty number: an empty field
+     * is what somebody leaves by accident, and reading it as unlimited would
+     * give a plan everything because a cell was not filled in. The product slug
+     * is only asked for when creating; renaming it would silently detach every
+     * grant that carries the old slug.
+     */
+    public static function limits(bool $creating): BlueprintInstance
+    {
+        $fields = [];
+
+        if ($creating) {
+            $fields[] = [
+                'handle' => 'product_slug',
+                'field' => [
+                    'type' => 'text',
+                    'display' => __('entitlements::cp.field_product_slug'),
+                    'instructions' => __('entitlements::cp.limits_product_instructions'),
+                    'validate' => ['required', 'max:191'],
+                ],
+            ];
+        }
+
+        $keys = collect(app(LimitCatalog::class)->keys())
+            ->map(fn (array $key, string $handle) => $key['label'] === $handle ? $handle : $key['label'].' ('.$handle.')')
+            ->implode(', ');
+
+        $fields[] = [
+            'handle' => 'limits',
+            'field' => [
+                'type' => 'grid',
+                'display' => __('entitlements::cp.limits_title'),
+                'instructions' => $keys === ''
+                    ? __('entitlements::cp.limits_grid_instructions')
+                    : __('entitlements::cp.limits_grid_instructions_keys', ['keys' => $keys]),
+                'mode' => 'table',
+                'add_row' => __('entitlements::cp.limits_add_row'),
+                'reorderable' => false,
+                'fields' => [
+                    [
+                        'handle' => 'limit_key',
+                        'field' => [
+                            'type' => 'text',
+                            'display' => __('entitlements::cp.limits_col_key'),
+                            'validate' => ['required', 'max:64', 'regex:/^[a-z0-9_.-]+$/'],
+                        ],
+                    ],
+                    [
+                        'handle' => 'value',
+                        'field' => [
+                            'type' => 'integer',
+                            'display' => __('entitlements::cp.limits_col_value'),
+                            'validate' => ['nullable', 'integer', 'min:0'],
+                        ],
+                    ],
+                    [
+                        'handle' => 'unlimited',
+                        'field' => [
+                            'type' => 'toggle',
+                            'display' => __('entitlements::cp.limits_col_unlimited'),
+                        ],
+                    ],
+                    [
+                        'handle' => 'period',
+                        'field' => [
+                            'type' => 'select',
+                            'display' => __('entitlements::cp.limits_col_period'),
+                            'options' => [
+                                'stock' => __('entitlements::cp.limits_period_stock'),
+                                'month' => __('entitlements::cp.limits_period_month'),
+                                'year' => __('entitlements::cp.limits_period_year'),
+                            ],
+                            'default' => 'stock',
+                            'clearable' => false,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        return Blueprint::make()->setContents([
+            'tabs' => [
+                'main' => [
+                    'display' => __('entitlements::cp.limits_title'),
+                    'sections' => [
+                        [
+                            'instructions' => __('entitlements::cp.limits_section_instructions'),
+                            'fields' => $fields,
                         ],
                     ],
                 ],

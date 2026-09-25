@@ -122,4 +122,59 @@ describe('the entitlement detail screen', () => {
 
         expect(wrapper.text()).toContain('2026-08-03 10:00 UTC');
     });
+
+    describe('the limits panel', () => {
+        const quota = {
+            key: 'analyses',
+            label: 'Analysen',
+            kind: 'usage',
+            limit: 50,
+            unlimited: false,
+            used: 50,
+            remaining: 0,
+            source: 'grant',
+            product: 'chor',
+            period: 'year',
+            period_end: '2027-03-14 00:00 UTC',
+            holder: 'team:7',
+            holder_label: 'Chor Nord',
+            held_elsewhere: true,
+            can_reset: true,
+            reset: { subject_type: 'team', subject_id: '7', key: 'analyses' },
+        };
+
+        const withQuotas = { ...props, quotas: [quota], limitsUrl: '/cp/entitlements/limits', resetUrl: '/cp/entitlements/usage/reset' };
+
+        it('shows what is left and where it is counted', () => {
+            const wrapper = mount(Show, { props: withQuotas });
+            const row = wrapper.find('[data-key="analyses"]');
+
+            expect(row.text()).toContain('Analysen');
+            expect(row.text()).toContain('50');
+            expect(row.text()).toContain('2027-03-14 00:00 UTC');
+            expect(row.text()).toContain('entitlements::cp.quota_held_by');
+        });
+
+        it('resets through the Inertia router after a confirmation, at the holder', async () => {
+            const wrapper = mount(Show, { props: withQuotas });
+
+            await wrapper.find('[data-key="analyses"] button').trigger('click');
+            expect(router.calls).toHaveLength(0);
+
+            await wrapper.find('[data-stub="ConfirmationModal"] [data-role="confirm"]').trigger('click');
+
+            expect(router.calls).toHaveLength(1);
+            expect(router.calls[0]).toMatchObject({
+                method: 'post',
+                url: '/cp/entitlements/usage/reset',
+                data: { subject_type: 'team', subject_id: '7', key: 'analyses' },
+            });
+        });
+
+        it('offers no reset without the permission', () => {
+            const wrapper = mount(Show, { props: { ...withQuotas, quotas: [{ ...quota, can_reset: false }] } });
+
+            expect(wrapper.find('[data-key="analyses"] button').exists()).toBe(false);
+        });
+    });
 });

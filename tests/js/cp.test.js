@@ -18,7 +18,9 @@ describe('the control panel entry point', () => {
         expect(Object.keys(inertia.pages).sort()).toEqual([
             'entitlements::Entitlements/Index',
             'entitlements::Entitlements/Show',
+            'entitlements::Limits/Index',
             'entitlements::SetupRequired',
+            'entitlements::Wiring',
         ]);
     });
 });

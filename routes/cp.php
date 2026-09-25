@@ -1,6 +1,9 @@
 <?php
 
 use Goldnead\Entitlements\Http\Controllers\Cp\EntitlementController;
+use Goldnead\Entitlements\Http\Controllers\Cp\LimitController;
+use Goldnead\Entitlements\Http\Controllers\Cp\UsageController;
+use Goldnead\Entitlements\Http\Controllers\Cp\WiringController;
 use Illuminate\Support\Facades\Route;
 
 // The kill switch has to bite here as well as on the nav item. Hiding the entry
@@ -22,6 +25,21 @@ if (! config('entitlements.cp.enabled', true)) {
 
 Route::prefix('entitlements')->name('entitlements.')->group(function () {
     Route::get('/', [EntitlementController::class, 'index'])->name('index');
+
+    // Before `{entitlement}`, and that one only matches digits anyway. The
+    // product in `limits/{product}` is a slug and deliberately not `{slug}` or
+    // `{product}`-bound: nothing resolves it, so no sibling's route of the
+    // same name is affected (see RouteParameterCollisionTest).
+    Route::get('limits', [LimitController::class, 'index'])->name('limits.index');
+    Route::get('limits/create', [LimitController::class, 'create'])->name('limits.create');
+    Route::post('limits', [LimitController::class, 'store'])->name('limits.store');
+    Route::get('limits/{product}/edit', [LimitController::class, 'edit'])->name('limits.edit')->where('product', '[^/]+');
+    Route::patch('limits/{product}', [LimitController::class, 'update'])->name('limits.update')->where('product', '[^/]+');
+
+    Route::post('usage/reset', [UsageController::class, 'reset'])->name('usage.reset');
+
+    Route::get('wiring', [WiringController::class, 'index'])->name('wiring');
+
     Route::get('create', [EntitlementController::class, 'create'])->name('create');
     Route::post('/', [EntitlementController::class, 'store'])->name('store');
 

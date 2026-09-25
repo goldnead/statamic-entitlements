@@ -106,6 +106,88 @@ Superusers are **not** special-cased. That is a host authorisation concern, and 
 into a domain answer would both bind this package to one user model and hide an override inside a
 decision. Check it before you ask.
 
+## Limits
+
+A grant says yes or no. A limit says how many: 50 analyses per year, 10 arrangements at a time. A
+permission is a product grant; an amount is a limit. There is no feature-flag catalogue.
+
+Limits hang off a product slug, like grants. Set them in the Control Panel (`Entitlements → Limits`),
+in code, or in config:
+
+```php
+Entitlements::setLimits('choir', [
+    'analyses' => ['value' => 50, 'period' => 'year'],   // usage, counted here
+    'arrangements' => 25,                                 // stock, counted by the app
+    'exports' => null,                                    // unlimited
+]);
+
+// config/entitlements.php
+'limits' => [
+    'keys' => ['analyses' => ['label' => 'Analyses', 'period' => 'year']],
+    'products' => ['free' => ['analyses' => 10, 'arrangements' => 3]],
+    'fallback_product' => 'free',   // applies to everybody without a grant carrying the key
+    'period_anchor' => 'grant',     // or 'calendar'
+],
+```
+
+`null` is unlimited, `0` is none. A stored row wins over config per key.
+
+**Which number applies.** Every grant that currently gives access counts, the subject's own and those
+of the subjects it acts for (see `extendSubjects()` below). The **highest** value wins, unlimited above
+any number; at equal height the subject's own grant wins. When that grant expires or is revoked, the
+limit falls to the next grant's, then to the fallback product, then to 0. Nothing is recomputed: it is
+derived on every read.
+
+**Two kinds.**
+
+```php
+// Usage per period: counted here, reset with the term.
+if (! Entitlements::consume($user, 'analyses')) {
+    return response()->json(['message' => 'Analysis quota exceeded.'], 403);
+}
+Entitlements::release($user, 'analyses');            // the job failed: give it back
+
+// Stock: the app counts, the addon decides.
+if (! Entitlements::withinLimit($user, 'arrangements', $tenant->projects()->count())) {
+    return response()->json(['message' => 'Project limit reached.'], 403);
+}
+
+// A stock read without a count uses the last count withinLimit() was given.
+Entitlements::limit($user, 'analyses');              // int|null (null = unlimited)
+Entitlements::remaining($user, 'analyses');          // int|null
+Entitlements::quota($user, 'analyses')->toArray();   // limit, used, remaining, period, holder, product…
+Entitlements::quotasFor($user);                      // every limit, keyed by key
+Entitlements::resetUsage($user, 'analyses', $actor);
+```
+
+**Where usage is counted.** At the *holder*: the subject whose grant sets the limit. A choir member
+using the choir's plan books against the choir's counter, so "50 per year for the choir" means 50.
+
+**Periods.** `month` or `year`, anchored on the start of the grant that sets the limit (a yearly plan
+bought on 14 March resets on 14 March), or on calendar months and years with
+`period_anchor = calendar`. The fallback product always uses calendar periods.
+`entitlements:announce` announces a period that ended with something used (`UsageReset`, reason
+`period`).
+
+**Concurrency.** A booking is one conditional UPDATE (`used = used + n WHERE used <= limit - n`); of
+two bookings on the last slot exactly one affects the row. The counter row is created with
+`insertOrIgnore` against a unique index. No `lockForUpdate()`, which SQLite compiles to nothing, and
+no caught INSERT, which would abort a caller's transaction on Postgres.
+`tests/Feature/Limits/ConcurrentConsumeTest.php` races two real processes on MySQL and Postgres in CI.
+
+### Further subjects (teams)
+
+```php
+Entitlements::extendSubjects(new TeamSubjects);   // a Contracts\SubjectExpander
+Entitlements::extendSubjects($teams);              // any object with relatedSubjects(SubjectReference)
+Entitlements::extendSubjects(fn ($subject, SubjectReference $ref) => [new SubjectReference('team', '7')]);
+// or tag a class: app()->tag([TeamSubjects::class], 'entitlements.subject-expanders');
+```
+
+Applies to `decide()`, `allows()`, `activeProductSlugsFor()` and every limit. **Not** to
+`forSubject()`, `renew()` or any write: a refund against a person must never revoke the team's grant.
+One level deep, never recursive; an expander that throws is logged and skipped.
+
 ## States
 
 | State | Access | Becomes active by itself | Stored in `status` |
@@ -134,14 +216,36 @@ drift into a second opinion.
 
 ## Events
 
-Four, and the package sends nothing else — no mail, no notifications, no magic links.
+Eight. The package sends one mail, "limit reached", and only when an operator switches it on.
 
-| Event | When | Payload |
-|---|---|---|
-| `EntitlementGranted` | a grant becomes `Active`, including out of `Pending` and when a scheduled grant starts | grant, previous state, actor |
-| `EntitlementPending` | a grant is parked without access | grant, actor |
-| `EntitlementRevoked` | an explicit revocation | grant, reason, previous state, actor |
-| `EntitlementExpired` | the window closed | grant, the instant access actually ended |
+| Event | Handle | When | Payload |
+|---|---|---|---|
+| `EntitlementGranted` | `entitlements.granted` | a grant becomes `Active`, including out of `Pending` and when a scheduled grant starts | grant, previous state, actor |
+| `EntitlementPending` | `entitlements.pending` | a grant is parked without access | grant, actor |
+| `EntitlementRenewed` | `entitlements.renewed` | the window moved later | grant, previous expiry, actor |
+| `EntitlementRevoked` | `entitlements.revoked` | an explicit revocation | grant, reason, previous state, actor |
+| `EntitlementExpired` | `entitlements.expired` | the window closed | grant, the instant access actually ended |
+| `LimitReached` | `entitlements.limit_reached` | a limit is full; once per period (usage) or per filling (stock) | subject, holder, key, limit, used, kind, product, period |
+| `UsageConsumed` | `entitlements.usage_consumed` | a booking went through | subject, holder, key, amount, used, limit, period |
+| `UsageReset` | `entitlements.usage_reset` | a counter starts from zero (period ended, or by hand) | holder, key, previous, reason, actor |
+
+The three limit events carry references and scalars only, plus `brandId`.
+
+**Webhook Manager.** All eight are triggers under the handles above. Body:
+`event`, `event_id` (sha1 of the moment's own parts, for de-duplication), `occurred_at`, `brand`
+(`{id, handle}`), `subject_type`, `subject_id`, then `entitlement` (id, product, source, source_ref,
+state, subject, starts/expires/grace/revoked dates, revoked_reason) or `holder` + `limit` (key,
+label, kind, limit, unlimited, used, remaining, product, period, period_start, period_end) or
+`holder` + `reset`. Never `meta`, never an actor's address. Dispatched after the commit, in the
+event's brand.
+
+**Automations.** The three limit events are triggers registered by this addon (filter: limit key,
+product). The five grant triggers ship with statamic-automations itself.
+
+**Mail.** "Limit reached" goes to the person who reached it (`Entitlements::mailRecipientsUsing()`
+to change that, for a team's owner), switched on per brand in the settings. The text is the
+email-templates template `entitlements-limit-reached` (`php artisan email-templates:import
+--source=Entitlements` makes it an editable entry); without email-templates the bundled text is sent.
 
 Each fires **once per transition**, not once per call: the write paths use conditional UPDATEs and
 check the affected-row count, so a retried job or a double-clicked button produces one event.
@@ -156,7 +260,8 @@ still goes out inside the same request, after the grant is written.
 
 ## Extension points
 
-Three, all optional, all null objects by default.
+Four, all optional, all null objects by default. The fourth, `Contracts\SubjectExpander`, is
+described under [Further subjects](#further-subjects-teams).
 
 **`Contracts\SubjectResolver`** — how your idea of "somebody" becomes a `(type, id)` pair. The default
 handles Eloquent models through the morph map and explicit `SubjectReference`s. Bind your own for
@@ -175,8 +280,14 @@ Attached by `class_exists`, never by Composer. With none installed the package s
 resolves states, decides access, fires events and serves the Control Panel — asserted in
 `tests/Feature/WithoutAnyBridgeTest.php`.
 
-- `goldnead/statamic-activity` — records all four events into the ledger.
+- `goldnead/statamic-activity` — records the grant events into the ledger.
 - `goldnead/statamic-leadhub` — lets a CRM contact be the subject.
+- `goldnead/statamic-webhook-manager` — all eight events as outbound webhook triggers.
+- `goldnead/statamic-automations` — the three limit events as automation triggers.
+- `goldnead/statamic-email-templates` — the "limit reached" mail as an editable template.
+
+`tests/Unit/BootWithoutSiblingsTest.php` boots the addon in its own process with the last three
+hidden from the autoloader.
 
 Availability is checked with `class_exists` on a concrete class. Never `method_exists` on a facade:
 a facade forwards through `__callStatic` and declares none of the methods it appears to have, so such
@@ -188,11 +299,18 @@ method, go through `Facade::getFacadeRoot()`.
 `Users → Entitlements`. A filterable listing (state, source, product), a detail screen with the
 resolved state and a timeline, a manual grant form and a revocation form whose reason is mandatory.
 
-Three permissions, because there are three different jobs:
+`Entitlements → Limits` lists every product with limits or grants and edits a product's limits;
+the grant detail screen shows the subject's limits as they apply now (used, left, period end, where
+it is counted) with a reset. `Entitlements → Wiring` lists the eight events, the mail that goes with
+one, and how many automations and outbound webhooks listen, with links to the Webhook Manager's
+trigger catalogue.
+
+Four permissions, because there are four different jobs:
 
 - `view entitlements` — a support task
 - `grant entitlements` — a commercial decision (restoring a revoked grant needs this one, not the next)
 - `revoke entitlements` — the one that generates a refund request
+- `manage entitlements limits` — changing what a plan allows, and resetting a counter
 
 Manual grants are always written with source `manual`; the form does not let an admin type
 `thrivecart` and fabricate a purchase in the audit trail.

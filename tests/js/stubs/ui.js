@@ -74,6 +74,12 @@ export const Icon = {
     },
 };
 export const Panel = container('section', 'Panel');
+export const Table = container('table', 'Table');
+export const TableColumns = container('thead', 'TableColumns');
+export const TableColumn = container('th', 'TableColumn');
+export const TableRows = container('tbody', 'TableRows');
+export const TableRow = container('tr', 'TableRow');
+export const TableCell = container('td', 'TableCell');
 export const PanelHeader = container('div', 'PanelHeader');
 export const Subheading = container('h3', 'Subheading');
 

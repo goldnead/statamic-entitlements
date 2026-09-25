@@ -27,6 +27,7 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use InvalidArgumentException;
+use Throwable;
 
 /**
  * The public API. Everything a consumer does to entitlements goes through here
@@ -463,8 +464,11 @@ class EntitlementManager
     {
         $references = [];
 
+        // A finished pair is taken as it is. subjectsOf() hands back pairs the
+        // bound resolver already produced, and a host resolver that only knows
+        // its own raw values (a licence key) must not be asked about one.
         foreach ($subjects as $subject) {
-            $references[] = $this->reference($subject);
+            $references[] = $subject instanceof SubjectReference ? $subject : $this->reference($subject);
         }
 
         return $this->newQuery()->where(function (Builder $query) use ($references): void {
@@ -487,17 +491,20 @@ class EntitlementManager
     /**
      * Let the grants of further subjects count for a subject.
      *
-     * The seam for teams, organisations, households: the resolver receives the
-     * subject exactly as a caller passed it plus its reference, and returns the
-     * subjects whose grants also apply — models, SubjectReferences, anything the
-     * bound SubjectResolver accepts. Applied one level deep, never recursively.
-     * See {@see SubjectExtensions}.
+     * The seam for teams, organisations, households. Takes a
+     * {@see Contracts\SubjectExpander} (or any object with `relatedSubjects()`,
+     * so a sibling need not require this package), its class name, or a
+     * closure `fn (mixed $subject, SubjectReference $reference): iterable`.
+     * Returns the subjects whose grants also apply — SubjectReferences, models,
+     * anything the bound SubjectResolver accepts. Applied one level deep, on the
+     * read side only (decide, allows, activeProductSlugsFor, limits); never in
+     * forSubject() or any write. See {@see SubjectExtensions}.
      *
-     * @param  callable(mixed, SubjectReference): iterable<mixed>  $resolver
+     * @param  callable(mixed, SubjectReference): iterable<mixed>|Contracts\SubjectExpander|object|class-string  $expander
      */
-    public function extendSubjects(callable $resolver): void
+    public function extendSubjects(mixed $expander): void
     {
-        app(SubjectExtensions::class)->register($resolver);
+        app(SubjectExtensions::class)->register($expander);
     }
 
     /**
@@ -510,7 +517,7 @@ class EntitlementManager
      */
     public function subjectsOf(mixed $subject): array
     {
-        $own = $this->reference($subject);
+        $own = $subject instanceof SubjectReference ? $subject : $this->reference($subject);
         $all = [$own->key() => $own];
 
         $extensions = app(SubjectExtensions::class);
@@ -521,8 +528,10 @@ class EntitlementManager
 
         foreach ($extensions->extraFor($subject, $own) as $extra) {
             try {
-                $reference = $this->reference($extra);
-            } catch (InvalidArgumentException) {
+                $reference = $extra instanceof SubjectReference ? $extra : $this->reference($extra);
+            } catch (Throwable) {
+                // A host resolver that cannot read what an expander returned
+                // costs that one extension, never the decision.
                 continue;
             }
 

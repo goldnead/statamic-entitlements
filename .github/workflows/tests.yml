@@ -92,7 +92,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_mysql, intl, fileinfo, gd
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, posix, pdo, pdo_mysql, intl, fileinfo, gd
           coverage: none
           tools: composer:v2
 
@@ -107,6 +107,52 @@ jobs:
           DB_USERNAME: root
           DB_PASSWORD: ''
         run: vendor/bin/pest -c phpunit.mysql.xml --colors=always
+
+  pgsql:
+    name: Postgres
+
+    # The limit counters promise that two bookings on the last slot cannot
+    # both succeed, and that promise lives in the engine. Postgres differs from
+    # MySQL where it matters: a failed statement poisons the whole transaction.
+    # ConcurrentConsumeTest races two real processes here and on MySQL.
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: entitlements_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, posix, pdo, pdo_pgsql, intl, fileinfo, gd
+          coverage: none
+          tools: composer:v2
+
+      - run: composer update --prefer-dist --no-progress --no-interaction
+
+      - name: Run the identical suite against Postgres
+        env:
+          DB_DRIVER: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: '5432'
+          DB_DATABASE: entitlements_test
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+        run: vendor/bin/pest -c phpunit.pgsql.xml --colors=always
 
   lint:
     name: lint

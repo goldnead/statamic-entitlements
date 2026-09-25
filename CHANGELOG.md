@@ -6,6 +6,30 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Limits.** Products carry limits (`key => number|null`), set in the Control Panel
+  (`Entitlements → Limits`), with `Entitlements::setLimits()` or in `entitlements.limits.products`.
+  Two kinds: usage per `month`/`year`, counted here (`consume()`, `release()`, `resetUsage()`), and
+  stock the app counts (`withinLimit()`). `limit()`, `remaining()`, `quota()`, `quotasFor()` read them.
+  Highest value over every grant that gives access; usage counts at the subject holding the grant.
+  Bookings are atomic (conditional UPDATE, `insertOrIgnore` against a unique index), raced for real
+  on MySQL and Postgres in CI. New tables `entitlement_limits` and `entitlement_usages`.
+- **Further subjects.** `Entitlements::extendSubjects()` and `Contracts\SubjectExpander` (or the tag
+  `entitlements.subject-expanders`): a team's grants count for its members in `decide()`, `allows()`,
+  `activeProductSlugsFor()` and every limit. Never in `forSubject()` or writes.
+- Events `LimitReached`, `UsageConsumed`, `UsageReset`; `entitlements:announce` also announces
+  periods that ended.
+- Webhook Manager: all eight events are triggers (`entitlements.*`). Automations: the three limit
+  events are triggers.
+- "Limit reached" mail as an email-templates template (`entitlements-limit-reached`), off by default,
+  switched on per brand in the settings. `Entitlements::mailRecipientsUsing()`.
+- Settings: `limits.fallback_product`, `limits.period_anchor`, `mail.limit_reached.enabled`,
+  `mail.limit_reached.template`.
+- Control Panel: limits per product, the subject's limits on a grant with a reset, and a wiring page.
+  New permission `manage entitlements limits`.
+- A Statamic user (file or Eloquent repository) is accepted as a subject.
+
 ### Fixed
 
 - `manual.subject_types` steht nicht mehr auf der Einstellungsseite der Suite. Der Wert darf

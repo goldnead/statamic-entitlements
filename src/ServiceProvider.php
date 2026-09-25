@@ -48,8 +48,6 @@ class ServiceProvider extends AddonServiceProvider
      *
      * Untyped on purpose: the parent declares it without a type and PHP refuses
      * a child that narrows one.
-     *
-     * @phpstan-ignore-next-line property.defaultValue
      */
     protected $vite = [
         'hotFile' => __DIR__.'/../resources/dist/hot',
@@ -237,7 +235,14 @@ class ServiceProvider extends AddonServiceProvider
                 // the nav item is also what earns the addon its breadcrumbs.
                 ->icon('key')
                 ->route('entitlements.index')
-                ->can('view entitlements');
+                ->can('view entitlements')
+                // Children, so the two new screens get breadcrumbs and a place
+                // in the sidebar without a second top-level entry.
+                ->children(fn () => [
+                    $nav->item(__('entitlements::cp.nav_grants'))->route('entitlements.index')->can('view entitlements'),
+                    $nav->item(__('entitlements::cp.limits_title'))->route('entitlements.limits.index')->can('view entitlements'),
+                    $nav->item(__('entitlements::cp.wiring_title'))->route('entitlements.wiring')->can('view entitlements'),
+                ]);
         });
 
         return $this;
@@ -268,6 +273,11 @@ class ServiceProvider extends AddonServiceProvider
                             ->label(__('entitlements::cp.permission_grant')),
                         Permission::make('revoke entitlements')
                             ->label(__('entitlements::cp.permission_revoke')),
+                        // Limits and resetting a counter: what a plan
+                        // allows is a commercial decision like granting,
+                        // and a sibling of it rather than part of it.
+                        Permission::make('manage entitlements limits')
+                            ->label(__('entitlements::cp.permission_limits')),
                     ]);
 
                 // Eigenes Recht, nicht als Kind von `view entitlements`: wer

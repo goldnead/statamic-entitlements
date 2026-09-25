@@ -2,6 +2,8 @@
 
 namespace Goldnead\Entitlements\Integrations\EmailTemplates;
 
+use Illuminate\Contracts\View\Factory as ViewFactory;
+use Statamic\Entries\Entry as EntryContract;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
 use Throwable;
@@ -29,6 +31,9 @@ class MailTemplates
     public const SOURCE_CONTRACT = 'Goldnead\\EmailTemplates\\Contracts\\EmailTemplateSource';
 
     public const COLLECTION = 'et_templates';
+
+    /** The bundled layout, used when email-templates is not there. */
+    public const LAYOUT = 'entitlements::mail.layout';
 
     public static function installed(): bool
     {
@@ -90,7 +95,7 @@ class MailTemplates
 
         return [
             'subject' => static::merge($default['subject'], $variables, escape: false),
-            'html' => (string) view('entitlements::mail.layout', [
+            'html' => app(ViewFactory::class)->make(self::LAYOUT, [
                 'body' => static::merge($default['body'], $variables),
                 'preview' => static::merge($default['preview'], $variables, escape: false),
             ])->render(),
@@ -123,13 +128,13 @@ class MailTemplates
 
     public static function entryExists(string $slug): bool
     {
-        return static::entry($slug) !== null;
+        return self::entry($slug) !== null;
     }
 
     /** The CP edit link of the template entry, or null when it has not been imported. */
     public static function editUrl(string $slug): ?string
     {
-        $entry = static::entry($slug);
+        $entry = self::entry($slug);
 
         try {
             return $entry?->editUrl();
@@ -138,7 +143,7 @@ class MailTemplates
         }
     }
 
-    private static function entry(string $slug): mixed
+    private static function entry(string $slug): ?EntryContract
     {
         if (! static::installed()) {
             return null;
@@ -149,7 +154,11 @@ class MailTemplates
                 return null;
             }
 
-            return Entry::query()->where('collection', self::COLLECTION)->where('slug', $slug)->first();
+            // A template collection holds a handful of entries; reading them
+            // is cheaper than a query builder whose contract does not declare
+            // `where()`.
+            return Entry::whereCollection(self::COLLECTION)
+                ->first(fn (EntryContract $entry) => $entry->slug() === $slug);
         } catch (Throwable) {
             return null;
         }

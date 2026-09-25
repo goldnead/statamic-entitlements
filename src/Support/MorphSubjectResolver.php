@@ -38,7 +38,7 @@ class MorphSubjectResolver implements SubjectResolver
                 return SubjectReference::for($model);
             }
 
-            $id = (string) $subject->id();
+            $id = method_exists($subject, 'id') ? (string) $subject->id() : '';
 
             if ($id !== '') {
                 return new SubjectReference('user', $id);

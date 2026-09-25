@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Facade;
  * @method static \Goldnead\Entitlements\Support\SubjectReference reference(mixed $subject)
  * @method static string subjectLabel(\Goldnead\Entitlements\Support\SubjectReference $reference)
  * @method static \Illuminate\Database\Eloquent\Builder forSubjects(iterable $subjects)
- * @method static void extendSubjects(callable $resolver)
+ * @method static void extendSubjects(mixed $expander)
  * @method static list<\Goldnead\Entitlements\Support\SubjectReference> subjectsOf(mixed $subject)
  * @method static int|null limit(mixed $subject, string $key)
  * @method static \Goldnead\Entitlements\Limits\Quota quota(mixed $subject, string $key, ?int $current = null)

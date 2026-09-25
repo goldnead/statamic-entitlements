@@ -87,7 +87,9 @@ return new class extends Migration
                 ['brand_id', 'subject_type', 'subject_id', 'limit_key', 'period_key'],
                 'ent_usages_subject_key_window_unique',
             );
-            $table->index(['period_end', 'rolled_over_at'], 'ent_usages_rollover_idx');
+            // brand_id first: entitlements:announce runs once per brand, and
+            // the brand scope puts it into every query.
+            $table->index(['brand_id', 'period_end', 'rolled_over_at'], 'ent_usages_rollover_idx');
         });
     }
 

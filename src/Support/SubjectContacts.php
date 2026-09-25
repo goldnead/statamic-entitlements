@@ -40,7 +40,7 @@ final class SubjectContacts
                 $email = $user?->email();
 
                 return is_string($email) && $email !== ''
-                    ? ['email' => $email, 'name' => self::string($user->get('name'))]
+                    ? ['email' => $email, 'name' => method_exists($user, 'get') ? self::string($user->get('name')) : null]
                     : null;
             }
         } catch (Throwable) {

@@ -5,6 +5,7 @@ namespace Goldnead\Entitlements\Http\Controllers\Cp;
 use Carbon\CarbonImmutable;
 use Goldnead\Entitlements\EntitlementManager;
 use Goldnead\Entitlements\Enums\EntitlementState;
+use Goldnead\Entitlements\Limits\LimitCatalog;
 use Goldnead\Entitlements\Models\Entitlement;
 use Goldnead\Entitlements\Query\Scopes\Filters\EntitlementFilter;
 use Goldnead\Entitlements\Support\Blueprints;
@@ -168,7 +169,55 @@ class EntitlementController extends Controller
             'restoreUrl' => cp_route('entitlements.restore', ['entitlement' => $model->getKey()]),
             'canRevoke' => Gate::allows('revoke entitlements') && $state !== EntitlementState::Revoked,
             'canRestore' => Gate::allows('grant entitlements') && $state === EntitlementState::Revoked,
+            'quotas' => $this->quotas($model),
+            'limitsUrl' => cp_route('entitlements.limits.index'),
+            'resetUrl' => cp_route('entitlements.usage.reset'),
         ]);
+    }
+
+    /**
+     * The limits of this grant's subject, as they apply right now — across all
+     * its grants and the subjects it acts for, not only this one row. That is
+     * the question a support person has: "how many has she left?".
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function quotas(Entitlement $model): array
+    {
+        $catalog = app(LimitCatalog::class);
+
+        if (! $catalog->ready()) {
+            return [];
+        }
+
+        $subject = new SubjectReference($model->subject_type, $model->subject_id);
+        $canManage = Gate::allows('manage entitlements limits');
+        $rows = [];
+
+        foreach ($this->entitlements->quotasFor($subject) as $key => $quota) {
+            $holder = $quota->holder;
+
+            $rows[] = [
+                'key' => $key,
+                'label' => $catalog->label($key),
+                'kind' => $quota->kind,
+                'limit' => $quota->limit,
+                'unlimited' => $quota->unlimited(),
+                'used' => $quota->used,
+                'remaining' => $quota->remaining(),
+                'source' => $quota->source,
+                'product' => $quota->product,
+                'period' => $quota->period,
+                'period_end' => $quota->periodEnd ? $this->stamp($quota->periodEnd) : null,
+                'holder' => $holder?->key(),
+                'holder_label' => $holder ? $this->entitlements->subjectLabel($holder) : null,
+                'held_elsewhere' => $holder !== null && ! $holder->equals($subject),
+                'can_reset' => $canManage && $quota->kind === 'usage' && (int) $quota->used > 0,
+                'reset' => $holder ? ['subject_type' => $holder->type, 'subject_id' => $holder->id, 'key' => $key] : null,
+            ];
+        }
+
+        return $rows;
     }
 
     public function revokeForm(int $entitlement)
