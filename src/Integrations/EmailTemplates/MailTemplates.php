@@ -4,7 +4,6 @@ namespace Goldnead\Entitlements\Integrations\EmailTemplates;
 
 use Goldnead\Entitlements\Integrations\EventCatalog;
 use Illuminate\Contracts\Foundation\Application;
-use Illuminate\Contracts\View\Factory as ViewFactory;
 use Illuminate\Support\Facades\Log;
 use Statamic\Entries\Entry as EntryContract;
 use Statamic\Facades\Collection;
@@ -198,7 +197,9 @@ class MailTemplates
 
         return [
             'subject' => static::merge($default['subject'], $variables, escape: false),
-            'html' => app(ViewFactory::class)->make(self::LAYOUT, [
+            // Through the container key: the namespace is registered at
+            // runtime, which static analysis of view names cannot see.
+            'html' => app('view')->make(self::LAYOUT, [
                 'body' => static::merge($default['body'], $variables),
                 'preview' => static::merge($default['preview'], $variables, escape: false),
             ])->render(),

@@ -6,7 +6,9 @@ use Goldnead\EmailTemplates\EmailTemplatesServiceProvider;
 use Goldnead\Entitlements\Integrations\Automations\AutomationsBridge;
 use Goldnead\Entitlements\Integrations\WebhookManager\WebhookManagerBridge;
 use Goldnead\StatamicAutomations\ServiceProvider as AutomationsServiceProvider;
+use Goldnead\WebhookManager\Events\TriggerDetected;
 use Goldnead\WebhookManager\WebhookManagerServiceProvider;
+use Illuminate\Support\Facades\DB;
 use ReflectionClass;
 use ReflectionMethod;
 
@@ -60,11 +62,28 @@ abstract class SiblingTestCase extends TestCase
 
         $this->artisan('migrate')->run();
 
+        // On MySQL the siblings' DDL just ended RefreshDatabase's transaction
+        // implicitly while Laravel still counts it open; a test that opens its
+        // own transaction would then ask for a savepoint that does not exist.
+        $pdo = DB::connection()->getPdo();
+
+        if (DB::transactionLevel() > 0 && ! $pdo->inTransaction()) {
+            $pdo->beginTransaction();
+        }
+
         $manager = $this->app->getProvider(WebhookManagerServiceProvider::class);
 
-        // Not `bootEvents`: the manager's TriggerDetected listener is already
-        // wired by its provider's boot, and wiring it again delivers twice.
-        foreach (['bootWebhookConfig', 'bootBindings', 'bootRegistries'] as $method) {
+        // `bootEvents` only when the manager's TriggerDetected listener is not
+        // there yet. Whether its provider's boot wired it depends on Statamic's
+        // addon manifest in the testbench app: locally it did (wiring it again
+        // delivered twice), in CI it did not (nothing was delivered).
+        $methods = ['bootWebhookConfig', 'bootBindings', 'bootRegistries'];
+
+        if (! $this->app['events']->hasListeners(TriggerDetected::class)) {
+            $methods[] = 'bootEvents';
+        }
+
+        foreach ($methods as $method) {
             if (method_exists($manager, $method)) {
                 (new ReflectionMethod($manager, $method))->invoke($manager);
             }
