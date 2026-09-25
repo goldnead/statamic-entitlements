@@ -9,7 +9,6 @@ use Goldnead\Entitlements\Contracts\SubjectResolver;
 use Goldnead\Entitlements\Events\LimitReached;
 use Goldnead\Entitlements\Integrations\Automations\AutomationsBridge;
 use Goldnead\Entitlements\Integrations\EmailTemplates\MailTemplates;
-use Goldnead\Entitlements\Integrations\EmailTemplates\TemplateSource;
 use Goldnead\Entitlements\Integrations\Insights\Active;
 use Goldnead\Entitlements\Integrations\Insights\Expired;
 use Goldnead\Entitlements\Integrations\Insights\Granted;
@@ -135,11 +134,7 @@ class ServiceProvider extends AddonServiceProvider
         $this->app->singleton(WebhookManagerBridge::class);
         $this->app->singleton(AutomationsBridge::class);
 
-        // Tagged for `email-templates:import` only when the sibling's interface
-        // exists, asked by name: TemplateSource implements it.
-        if (interface_exists(MailTemplates::SOURCE_CONTRACT)) {
-            $this->app->tag([TemplateSource::class], 'email-templates.sources');
-        }
+        MailTemplates::announce($this->app);
 
         $boot = function (): void {
             try {

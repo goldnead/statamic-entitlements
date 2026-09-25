@@ -2,7 +2,10 @@
 
 namespace Goldnead\Entitlements\Integrations\EmailTemplates;
 
+use Goldnead\Entitlements\Integrations\EventCatalog;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\View\Factory as ViewFactory;
+use Illuminate\Support\Facades\Log;
 use Statamic\Entries\Entry as EntryContract;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
@@ -34,6 +37,106 @@ class MailTemplates
 
     /** The bundled layout, used when email-templates is not there. */
     public const LAYOUT = 'entitlements::mail.layout';
+
+    public const REGISTRY = 'email-templates.registry';
+
+    /**
+     * Tell email-templates which mails this addon sends.
+     *
+     * Through its registry where there is one (2.8 and later): that is what
+     * shows editors "sent on: Entitlements, a limit is reached", the
+     * placeholders, the preview examples, and what `email-templates:import
+     * --source=Entitlements` writes. Plain arrays and closures only, so no class
+     * of the sibling is touched. On an older email-templates the import source
+     * is tagged instead, asked for by interface name first because
+     * {@see TemplateSource} implements it. Never both: the import would see the
+     * same template twice.
+     */
+    public static function announce(Application $app): void
+    {
+        if (! config('entitlements.bridges.email_templates', true)) {
+            return;
+        }
+
+        if ($app->bound(self::REGISTRY)) {
+            try {
+                foreach (static::definitions() as $definition) {
+                    $app->make(self::REGISTRY)->register($definition);
+                }
+            } catch (Throwable $e) {
+                Log::warning('statamic-entitlements: the mails could not be registered with email-templates.', [
+                    'exception' => $e->getMessage(),
+                ]);
+            }
+
+            return;
+        }
+
+        if (interface_exists(self::SOURCE_CONTRACT)) {
+            $app->tag([TemplateSource::class], 'email-templates.sources');
+        }
+    }
+
+    /**
+     * The registry entries, one per mail.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function definitions(): array
+    {
+        $definitions = [];
+
+        foreach (EventCatalog::MAILS as $moment => $configPath) {
+            $definitions[] = [
+                'slug' => static::defaults($moment)['slug'],
+                'addon' => 'Entitlements',
+                'trigger' => fn () => __('entitlements::mail.'.$moment.'.trigger'),
+                'event' => EventCatalog::MOMENTS[$moment][0],
+                'placeholders' => static::placeholders($moment),
+                'defaults' => function () use ($moment) {
+                    $default = static::defaults($moment);
+
+                    return [
+                        'title' => $default['title'],
+                        'subject' => $default['subject'],
+                        'preview' => $default['preview'],
+                        'body' => $default['body'],
+                        'description' => $default['description'],
+                    ];
+                },
+            ];
+        }
+
+        return $definitions;
+    }
+
+    /**
+     * @return array<string, array{label: string, example: string}>
+     */
+    public static function placeholders(string $moment): array
+    {
+        $keys = [
+            'name' => 'Anna',
+            'limit_label' => 'Analysen',
+            'limit' => '50',
+            'used' => '50',
+            'product' => 'chor-jahr',
+            'period_end' => '14. März 2027',
+            'period_note' => (string) __('entitlements::mail.limit_reached.note_usage', ['date' => '14. März 2027']),
+            'app_name' => (string) config('app.name'),
+        ];
+
+        $placeholders = [];
+
+        foreach ($keys as $key => $example) {
+            $placeholders[$key] = [
+                'label' => (string) __('entitlements::mail.placeholders.'.$key),
+                'example' => $example,
+            ];
+        }
+
+        return $placeholders;
+    }
 
     public static function installed(): bool
     {

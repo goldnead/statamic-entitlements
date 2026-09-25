@@ -1,7 +1,19 @@
 <?php
 
 return [
+    'placeholders' => [
+        'name' => 'Name der Person, die die Grenze erreicht hat',
+        'limit_label' => 'Name des Kontingents',
+        'limit' => 'Die Grenze',
+        'used' => 'So viel ist genutzt',
+        'product' => 'Produkt, aus dem die Grenze kommt',
+        'period_end' => 'Ende des Zeitraums (leer bei Bestand)',
+        'period_note' => 'Ein Satz, wann wieder Platz ist',
+        'app_name' => 'Name der Website',
+    ],
+
     'limit_reached' => [
+        'trigger' => 'Ein Kontingent ist ausgeschöpft',
         'title' => 'Entitlements: Grenze erreicht',
         'description' => 'Geht an die Person, die ein Kontingent ausgeschöpft hat. Platzhalter: name, limit_label, limit, used, product, period_end, period_note, app_name.',
         'subject' => '{{ limit_label }}: Grenze erreicht',

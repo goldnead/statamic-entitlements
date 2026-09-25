@@ -244,8 +244,10 @@ product). The five grant triggers ship with statamic-automations itself.
 
 **Mail.** "Limit reached" goes to the person who reached it (`Entitlements::mailRecipientsUsing()`
 to change that, for a team's owner), switched on per brand in the settings. The text is the
-email-templates template `entitlements-limit-reached` (`php artisan email-templates:import
---source=Entitlements` makes it an editable entry); without email-templates the bundled text is sent.
+email-templates template `entitlements-limit-reached`, registered with its registry (trigger,
+event, placeholders with examples, defaults; on an email-templates without a registry through the
+`email-templates.sources` tag). `php artisan email-templates:import --source=Entitlements` makes it an
+editable entry; until then the default goes out. Without email-templates the bundled text is sent.
 
 Each fires **once per transition**, not once per call: the write paths use conditional UPDATEs and
 check the affected-row count, so a retried job or a double-clicked button produces one event.
