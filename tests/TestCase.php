@@ -125,6 +125,24 @@ abstract class TestCase extends Orchestra
      */
     protected function testingConnection(): array
     {
+        if (env('DB_DRIVER', 'sqlite') === 'pgsql') {
+            // Postgres, for the concurrency guarantees of the limit counters:
+            // a failed statement there poisons the enclosing transaction, which
+            // is exactly the behaviour neither SQLite nor MySQL shows.
+            return [
+                'driver' => 'pgsql',
+                'host' => env('DB_HOST', '127.0.0.1'),
+                'port' => env('DB_PORT', '5432'),
+                'database' => env('DB_DATABASE', 'entitlements_test'),
+                'username' => env('DB_USERNAME', 'postgres'),
+                'password' => env('DB_PASSWORD', ''),
+                'charset' => 'utf8',
+                'prefix' => '',
+                'search_path' => 'public',
+                'sslmode' => 'prefer',
+            ];
+        }
+
         if (env('DB_DRIVER', 'sqlite') !== 'mysql') {
             return [
                 'driver' => 'sqlite',

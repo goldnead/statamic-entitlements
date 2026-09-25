@@ -12,9 +12,13 @@ use Goldnead\Entitlements\Events\EntitlementPending;
 use Goldnead\Entitlements\Events\EntitlementRenewed;
 use Goldnead\Entitlements\Events\EntitlementRevoked;
 use Goldnead\Entitlements\Facades\Entitlements;
+use Goldnead\Entitlements\Limits\LimitCatalog;
+use Goldnead\Entitlements\Limits\Quota;
+use Goldnead\Entitlements\Limits\QuotaManager;
 use Goldnead\Entitlements\Models\Entitlement;
 use Goldnead\Entitlements\Support\AccessDecision;
 use Goldnead\Entitlements\Support\StateResolver;
+use Goldnead\Entitlements\Support\SubjectExtensions;
 use Goldnead\Entitlements\Support\SubjectReference;
 use Goldnead\IdentityContracts\Identity;
 use Illuminate\Contracts\Events\Dispatcher;
@@ -388,8 +392,13 @@ class EntitlementManager
     {
         $slugs = [$productSlug, ...$this->packages->packagesContaining($productSlug)];
 
+        // The subject's own grants first, then those of every subject it acts
+        // for (see extendSubjects()). With no extension registered this is the
+        // one subject and the query is the one it always was.
+        $subjects = $this->subjectsOf($subject);
+
         $granted = StateResolver::constrainToAccess(
-            $this->forSubject($subject)->whereIn('product_slug', array_unique($slugs))
+            $this->forSubjects($subjects)->whereIn('product_slug', array_unique($slugs))
         )->first();
 
         if ($granted instanceof Entitlement) {
@@ -398,7 +407,7 @@ class EntitlementManager
 
         // No access. Hand back the closest grant that exists so a refusal can be
         // explained — "your access ran out on the 3rd" rather than "no".
-        $closest = $this->forSubject($subject)
+        $closest = $this->forSubjects($subjects)
             ->whereIn('product_slug', array_unique($slugs))
             ->orderByRaw('CASE WHEN expires_at IS NULL THEN 0 ELSE 1 END')
             ->orderByDesc('expires_at')
@@ -420,7 +429,7 @@ class EntitlementManager
      */
     public function activeProductSlugsFor(mixed $subject): array
     {
-        return StateResolver::constrainToAccess($this->forSubject($subject))
+        return StateResolver::constrainToAccess($this->forSubjects($this->subjectsOf($subject)))
             ->pluck('product_slug')
             ->unique()
             ->values()
@@ -440,6 +449,174 @@ class EntitlementManager
         return $this->newQuery()
             ->where('subject_type', $reference->type)
             ->where('subject_id', $reference->id);
+    }
+
+    /**
+     * A query over the grants of several subjects at once.
+     *
+     * @param  iterable<mixed>  $subjects  Anything reference() accepts.
+     * @return Builder<Entitlement>
+     */
+    public function forSubjects(iterable $subjects): Builder
+    {
+        $references = [];
+
+        foreach ($subjects as $subject) {
+            $references[] = $this->reference($subject);
+        }
+
+        return $this->newQuery()->where(function (Builder $query) use ($references): void {
+            if ($references === []) {
+                // Nobody, so nothing. Without this the empty group would match
+                // every row in the table.
+                $query->whereRaw('1 = 0');
+
+                return;
+            }
+
+            foreach ($references as $reference) {
+                $query->orWhere(fn (Builder $q) => $q
+                    ->where('subject_type', $reference->type)
+                    ->where('subject_id', $reference->id));
+            }
+        });
+    }
+
+    /**
+     * Let the grants of further subjects count for a subject.
+     *
+     * The seam for teams, organisations, households: the resolver receives the
+     * subject exactly as a caller passed it plus its reference, and returns the
+     * subjects whose grants also apply — models, SubjectReferences, anything the
+     * bound SubjectResolver accepts. Applied one level deep, never recursively.
+     * See {@see SubjectExtensions}.
+     *
+     * @param  callable(mixed, SubjectReference): iterable<mixed>  $resolver
+     */
+    public function extendSubjects(callable $resolver): void
+    {
+        app(SubjectExtensions::class)->register($resolver);
+    }
+
+    /**
+     * The subject itself, then every subject it acts for, de-duplicated.
+     *
+     * The order is the tie-breaker for limits: at equal height the subject's
+     * own grant wins over a team's.
+     *
+     * @return list<SubjectReference>
+     */
+    public function subjectsOf(mixed $subject): array
+    {
+        $own = $this->reference($subject);
+        $all = [$own->key() => $own];
+
+        $extensions = app(SubjectExtensions::class);
+
+        if ($extensions->isEmpty()) {
+            return [$own];
+        }
+
+        foreach ($extensions->extraFor($subject, $own) as $extra) {
+            try {
+                $reference = $this->reference($extra);
+            } catch (InvalidArgumentException) {
+                continue;
+            }
+
+            $all[$reference->key()] ??= $reference;
+        }
+
+        return array_values($all);
+    }
+
+    // ----------------------------------------------------------------- limits
+
+    /**
+     * The number this subject may have or use of `$key`: null is unlimited,
+     * 0 is none. Highest value across every grant that currently gives access,
+     * the subject's own and those of the subjects it acts for.
+     */
+    public function limit(mixed $subject, string $key): ?int
+    {
+        return $this->quotas()->quota($subject, $key)->limit;
+    }
+
+    /** Everything about one limit: height, holder, period, used, remaining. */
+    public function quota(mixed $subject, string $key, ?int $current = null): Quota
+    {
+        return $this->quotas()->quota($subject, $key, $current);
+    }
+
+    /**
+     * Every limit this subject has, keyed by limit key.
+     *
+     * @return array<string, Quota>
+     */
+    public function quotasFor(mixed $subject): array
+    {
+        return $this->quotas()->quotasFor($subject);
+    }
+
+    /**
+     * What is left: null when unlimited. For a stock limit pass what the caller
+     * counted (`$current`); for a usage limit the counter here is used.
+     */
+    public function remaining(mixed $subject, string $key, ?int $current = null): ?int
+    {
+        return $this->quotas()->quota($subject, $key, $current)->remaining();
+    }
+
+    /** Book `$amount` against a usage limit, atomically. False means refused. */
+    public function consume(mixed $subject, string $key, int $amount = 1): bool
+    {
+        return $this->quotas()->consume($subject, $key, $amount);
+    }
+
+    /** Give back what a failed job booked. False when there was nothing to give back. */
+    public function release(mixed $subject, string $key, int $amount = 1): bool
+    {
+        return $this->quotas()->release($subject, $key, $amount);
+    }
+
+    /**
+     * Whether a stock limit has room for `$adding` more, given what the caller
+     * counted. Records the count, and fires LimitReached once when it is full.
+     */
+    public function withinLimit(mixed $subject, string $key, int $current, int $adding = 1): bool
+    {
+        return $this->quotas()->withinLimit($subject, $key, $current, $adding);
+    }
+
+    /** Set the counter of the current period back to zero. */
+    public function resetUsage(mixed $subject, string $key, ?Identity $actor = null): bool
+    {
+        return $this->quotas()->reset($subject, $key, $actor);
+    }
+
+    /**
+     * The limits a product carries, config and stored rows merged.
+     *
+     * @return array<string, array{value: int|null, period: string|null}>
+     */
+    public function limitsFor(string $productSlug): array
+    {
+        return app(LimitCatalog::class)->forProduct($productSlug);
+    }
+
+    /**
+     * Replace the stored limits of a product.
+     *
+     * @param  array<string, int|null|array{value?: int|null, period?: string|null}>  $limits
+     */
+    public function setLimits(string $productSlug, array $limits): void
+    {
+        app(LimitCatalog::class)->store($productSlug, $limits);
+    }
+
+    private function quotas(): QuotaManager
+    {
+        return app(QuotaManager::class);
     }
 
     /** @return Builder<Entitlement> */

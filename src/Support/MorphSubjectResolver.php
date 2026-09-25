@@ -5,6 +5,7 @@ namespace Goldnead\Entitlements\Support;
 use Goldnead\Entitlements\Contracts\SubjectResolver;
 use Illuminate\Database\Eloquent\Model;
 use InvalidArgumentException;
+use Statamic\Contracts\Auth\User as StatamicUser;
 
 /**
  * The default subject resolver: Eloquent models through the morph map, plus
@@ -25,6 +26,23 @@ class MorphSubjectResolver implements SubjectResolver
 
         if ($subject instanceof Model) {
             return SubjectReference::for($subject);
+        }
+
+        // A Statamic user. With the Eloquent repository it wraps the model, and
+        // the model's morph type is what every other path writes, so the same
+        // person is one subject whichever of the two a caller holds. With the
+        // file repository there is no model: the type is `user` and the id is
+        // Statamic's, as statamic-courses writes it.
+        if ($subject instanceof StatamicUser) {
+            if (method_exists($subject, 'model') && ($model = $subject->model()) instanceof Model) {
+                return SubjectReference::for($model);
+            }
+
+            $id = (string) $subject->id();
+
+            if ($id !== '') {
+                return new SubjectReference('user', $id);
+            }
         }
 
         throw new InvalidArgumentException(

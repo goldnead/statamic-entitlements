@@ -10,11 +10,14 @@ use Goldnead\Entitlements\Integrations\Insights\Active;
 use Goldnead\Entitlements\Integrations\Insights\Expired;
 use Goldnead\Entitlements\Integrations\Insights\Granted;
 use Goldnead\Entitlements\Integrations\Insights\Revoked;
+use Goldnead\Entitlements\Limits\LimitCatalog;
+use Goldnead\Entitlements\Limits\QuotaManager;
 use Goldnead\Entitlements\Query\Scopes\Filters;
 use Goldnead\Entitlements\Support\MorphSubjectResolver;
 use Goldnead\Entitlements\Support\NullPackageResolver;
 use Goldnead\Entitlements\Support\Settings;
 use Goldnead\Entitlements\Support\SourceRegistry;
+use Goldnead\Entitlements\Support\SubjectExtensions;
 use Illuminate\Support\Facades\Log;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
@@ -63,6 +66,12 @@ class ServiceProvider extends AddonServiceProvider
         $this->app->bind(PackageResolver::class, NullPackageResolver::class);
 
         $this->app->singleton(SourceRegistry::class);
+
+        // Shared on purpose: a sibling registers its subject extension once at
+        // boot, and every later read has to see it.
+        $this->app->singleton(SubjectExtensions::class);
+        $this->app->singleton(LimitCatalog::class);
+        $this->app->singleton(QuotaManager::class);
 
         // NOT bound under a short slug. A container key named after the addon is
         // how a sibling package overwrote Laravel's own `events` dispatcher; the

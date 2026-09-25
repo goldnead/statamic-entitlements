@@ -20,6 +20,19 @@ use Illuminate\Support\Facades\Facade;
  * @method static \Illuminate\Database\Eloquent\Builder query()
  * @method static \Goldnead\Entitlements\Support\SubjectReference reference(mixed $subject)
  * @method static string subjectLabel(\Goldnead\Entitlements\Support\SubjectReference $reference)
+ * @method static \Illuminate\Database\Eloquent\Builder forSubjects(iterable $subjects)
+ * @method static void extendSubjects(callable $resolver)
+ * @method static list<\Goldnead\Entitlements\Support\SubjectReference> subjectsOf(mixed $subject)
+ * @method static int|null limit(mixed $subject, string $key)
+ * @method static \Goldnead\Entitlements\Limits\Quota quota(mixed $subject, string $key, ?int $current = null)
+ * @method static array<string, \Goldnead\Entitlements\Limits\Quota> quotasFor(mixed $subject)
+ * @method static int|null remaining(mixed $subject, string $key, ?int $current = null)
+ * @method static bool consume(mixed $subject, string $key, int $amount = 1)
+ * @method static bool release(mixed $subject, string $key, int $amount = 1)
+ * @method static bool withinLimit(mixed $subject, string $key, int $current, int $adding = 1)
+ * @method static bool resetUsage(mixed $subject, string $key, ?\Goldnead\IdentityContracts\Identity $actor = null)
+ * @method static array<string, array{value: int|null, period: string|null}> limitsFor(string $productSlug)
+ * @method static void setLimits(string $productSlug, array $limits)
  *
  * @see EntitlementManager
  */

@@ -8,8 +8,12 @@ use Goldnead\Entitlements\EntitlementManager;
 use Goldnead\Entitlements\Enums\EntitlementState;
 use Goldnead\Entitlements\Events\EntitlementExpired;
 use Goldnead\Entitlements\Events\EntitlementGranted;
+use Goldnead\Entitlements\Events\UsageReset;
+use Goldnead\Entitlements\Limits\LimitCatalog;
 use Goldnead\Entitlements\Models\Entitlement;
+use Goldnead\Entitlements\Models\Usage;
 use Goldnead\Entitlements\Support\StateResolver;
+use Goldnead\Entitlements\Support\SubjectReference;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Eloquent\Builder;
@@ -66,8 +70,12 @@ class AnnounceStateTransitions extends Command
 
             $activated = $this->announceActivations($events, $now, $limit);
             $expired = $this->announceExpiries($events, $now, $limit);
+            $rolled = $this->announceRollovers($events, $now, $limit);
 
-            $this->line(sprintf('Announced %d activation(s) and %d expiry(ies).', $activated, $expired));
+            $this->line(sprintf(
+                'Announced %d activation(s), %d expiry(ies) and %d usage reset(s).',
+                $activated, $expired, $rolled,
+            ));
 
             return self::SUCCESS;
         });
@@ -135,6 +143,57 @@ class AnnounceStateTransitions extends Command
             $entitlement->refresh();
 
             $events->dispatch(new EntitlementExpired($entitlement, $until));
+
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
+     * Usage counters whose period has ended.
+     *
+     * The counter itself needs nothing: the next booking lands in the next
+     * period's row. What needs announcing is the moment, so a listener can say
+     * "your analyses are available again". Claimed through `rolled_over_at`
+     * exactly like the two transitions above, so overlapping runs announce each
+     * period once. A period in which nothing was used is closed silently.
+     */
+    private function announceRollovers(Dispatcher $events, CarbonImmutable $now, int $limit): int
+    {
+        if (! app(LimitCatalog::class)->ready()) {
+            return 0;
+        }
+
+        $count = 0;
+
+        $candidates = Usage::query()
+            ->whereNull('rolled_over_at')
+            ->whereNotNull('period_end')
+            ->where('period_end', '<=', $now->format('Y-m-d H:i:s'))
+            ->orderBy('id')
+            ->limit($limit)
+            ->get();
+
+        foreach ($candidates as $usage) {
+            $claimed = Usage::query()
+                ->whereKey($usage->getKey())
+                ->whereNull('rolled_over_at')
+                ->update(['rolled_over_at' => $now->format('Y-m-d H:i:s')]) === 1;
+
+            if (! $claimed || $usage->used === 0) {
+                continue;
+            }
+
+            $events->dispatch(new UsageReset(
+                holder: new SubjectReference($usage->subject_type, $usage->subject_id),
+                key: $usage->limit_key,
+                previous: $usage->used,
+                reason: UsageReset::REASON_PERIOD,
+                periodStart: $usage->period_start,
+                periodEnd: $usage->period_end,
+                occurredAt: $usage->period_end,
+            ));
 
             $count++;
         }
