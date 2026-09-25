@@ -157,13 +157,17 @@ class QuotaManager
         // The booking and the server's copy of its receipt together, or
         // neither: a receipt without its booking would give back what was
         // never taken, a booking without its receipt could never be given back.
-        $won = DB::transaction(function () use ($booking, $amount, $quota, $row, $receiptId, $key): bool {
+        // Checked non-null above; held in a local so the closure needs no
+        // second check.
+        $holder = $quota->holder;
+
+        $won = DB::transaction(function () use ($booking, $amount, $quota, $row, $receiptId, $key, $holder): bool {
             $won = $booking->update([
                 'used' => DB::raw('used + '.$amount),
                 'limit_value' => $quota->limit,
             ]) === 1;
 
-            if (! $won || $quota->holder === null) {
+            if (! $won) {
                 return false;
             }
 
@@ -171,8 +175,8 @@ class QuotaManager
                 'id' => $receiptId,
                 'brand_id' => (int) $row->brand_id,
                 'usage_id' => $row->getKey(),
-                'subject_type' => $quota->holder->type,
-                'subject_id' => $quota->holder->id,
+                'subject_type' => $holder->type,
+                'subject_id' => $holder->id,
                 'limit_key' => $key,
                 'period_key' => $row->period_key,
                 'amount' => $amount,
@@ -225,8 +229,9 @@ class QuotaManager
      * Give back what a booking took.
      *
      * With the booking's receipt, into exactly the counter it went to — the
-     * period it was booked in, at the holder that held it — and once only.
-     * `$subject` and `$key` are not consulted then; the receipt decides.
+     * period it was booked in, at the holder that held it — and never more than
+     * was booked. The stored receipt decides where; `$subject` and `$key` must
+     * match it (see releaseReceipt()).
      *
      * Without one, only into the current period of the current holder, and
      * only as much as that period holds: a booking from last month cannot be
@@ -433,10 +438,29 @@ class QuotaManager
 
         $previous = $row->used;
 
-        $won = Usage::query()
-            ->whereKey($row->getKey())
-            ->where('used', '>', 0)
-            ->update(['used' => 0, 'reached_at' => null]) === 1;
+        // The counter and the receipts booked against it together: after a
+        // reset nothing booked before it is on the counter any more, so no
+        // receipt from before may take anything off it. Left open, an old
+        // receipt would lower the count of bookings made after the reset,
+        // and consume/reset/release would get round any limit.
+        $won = DB::transaction(function () use ($row): bool {
+            $won = Usage::query()
+                ->whereKey($row->getKey())
+                ->where('used', '>', 0)
+                ->update(['used' => 0, 'reached_at' => null]) === 1;
+
+            if ($won) {
+                UsageReceiptRecord::query()
+                    ->where('usage_id', $row->getKey())
+                    ->whereColumn('released', '<', 'amount')
+                    ->update([
+                        'released' => DB::raw('amount'),
+                        'released_at' => CarbonImmutable::now('UTC')->format('Y-m-d H:i:s'),
+                    ]);
+            }
+
+            return $won;
+        });
 
         if (! $won) {
             return false;

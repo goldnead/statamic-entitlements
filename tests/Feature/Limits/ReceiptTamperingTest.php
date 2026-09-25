@@ -120,6 +120,16 @@ it('P7: refuses with null, which `! consume()` and `=== null` read as refused', 
     expect($refused)->toBeNull()->and(! $refused)->toBeTrue();
 });
 
+it('P8: closes open receipts when the counter is reset, so an old one cannot empty the new count', function () {
+    $old = Entitlements::consume($this->anna, 'analyses', 2);
+
+    Entitlements::resetUsage($this->anna, 'analyses');
+    Entitlements::consume($this->anna, 'analyses', 10);
+
+    expect(Entitlements::release($this->anna, 'analyses', receipt: $old))->toBeFalse()
+        ->and(($this->used)($this->anna))->toBe(10);
+});
+
 it('refuses a receipt id that is not an id, rather than shortening it', function () {
     $receipt = Entitlements::consume($this->anna, 'analyses', 1)->toArray();
 

@@ -183,7 +183,10 @@ The server keeps its own copy of every receipt, and **only the `id` is read from
 presents**: holder, period, amount and brand come from the stored copy. A release is refused (false,
 logged) when the receipt is unknown in the current brand, was issued for another key, or is held by
 a subject that is neither the one passed nor one it acts for. The deduction is one UPDATE that
-cannot go below zero, in the same transaction as the claim.
+cannot go below zero, in the same transaction as the claim. Two consequences, both intended: a
+member who has left a team can no longer release that team's bookings (pass the team, or a current
+member), and `resetUsage()` closes every open receipt of the counter it resets, so a receipt from
+before a reset never takes anything off the count after it.
 
 Without a receipt a release only reaches the current period of the current holder; when that holds
 less than asked (a March booking released in April), nothing changes and a warning is logged.

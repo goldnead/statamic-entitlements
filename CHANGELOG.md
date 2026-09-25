@@ -39,7 +39,8 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   back into its own period and holder, up to what was booked. The server keeps every receipt
   (table `entitlement_usage_receipts`) and checks a release against that copy only: the id is the
   one thing read from what the caller presents; the brand must be the current one, the key the one
-  asked about, the holder the subject or one it acts for. Claim and deduction in one transaction,
+  asked about, the holder the subject or one it acts for. `resetUsage()` closes the open receipts
+  of the counter it resets, in the same transaction. Claim and deduction in one transaction,
   never below zero. Without a receipt a release stays in the current period and logs when it finds
   nothing.
 - Fallback product per subject type (`limits.fallback_products`) and `Entitlements::fallbackUsing()`.
