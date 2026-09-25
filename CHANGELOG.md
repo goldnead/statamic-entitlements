@@ -4,13 +4,13 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this package
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.5.0] — 2026-09-25
 
-### Breaking
+### Notes
 
-- `consume()` returns `?UsageReceipt`, not `bool` (it has not been released as `bool`, but callers
-  written against the development branch are affected). Check with `! consume(...)` or
-  `=== null`; `=== false` and `=== true` no longer mean anything.
+- `consume()` and `release()` are new in this release; no released API changes. `consume()`
+  returns `?UsageReceipt`: check with `! consume(...)` or `=== null`. Code written against the
+  development branch, where it briefly returned `bool`, must drop `=== false` / `=== true`.
 
 ### Added
 
