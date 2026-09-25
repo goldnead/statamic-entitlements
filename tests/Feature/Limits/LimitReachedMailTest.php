@@ -72,5 +72,5 @@ it('never lets a broken mailer cost the booking', function () {
     config()->set('entitlements.mail.limit_reached.enabled', true);
     Entitlements::mailRecipientsUsing(fn () => throw new RuntimeException('Postfach weg'));
 
-    expect(Entitlements::consume($this->anna, 'analyses', 2))->toBeTrue();
+    expect(Entitlements::consume($this->anna, 'analyses', 2))->not->toBeNull();
 });

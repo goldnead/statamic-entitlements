@@ -121,8 +121,13 @@ return [
     'limits_key_twice' => 'The key :key is already on this product.',
     'limits_empty_heading' => 'No limits yet. A grant only says yes or no so far.',
     'limits_empty_create_description' => 'Put numbers on a product: how many analyses a year, how many projects at a time.',
-    'limits_fallback' => 'Without a grant: :product',
-    'limits_fallback_none' => 'Without a grant every limit is zero.',
+    'limits_fallback' => 'Anybody without a grant carrying the limit gets the limits of :product.',
+    'limits_fallback_type' => ':type without a grant: :product.',
+    'limits_fallback_none' => 'Anybody without a grant carrying the limit gets 0 of it. A product for everybody without a grant (a free plan, say) is set in the settings.',
+    'limits_fallback_none_value' => 'nothing (0)',
+    'sources' => [
+        'manual' => 'Manual grant',
+    ],
 
     'quotas' => 'Limits',
     'quotas_none' => 'No limit applies to this subject.',

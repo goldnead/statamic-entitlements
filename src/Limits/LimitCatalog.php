@@ -27,7 +27,8 @@ class LimitCatalog
         // Only a yes is remembered: a migration can run while a worker lives,
         // and a remembered no would outlast it.
         return $this->ready = $this->ready
-            || (Schema::hasTable('entitlement_limits') && Schema::hasTable('entitlement_usages'));
+            || (Schema::hasTable('entitlement_limits') && Schema::hasTable('entitlement_usages')
+                && Schema::hasTable('entitlement_usage_releases'));
     }
 
     private bool $ready = false;
@@ -40,7 +41,7 @@ class LimitCatalog
         $limits = [];
 
         foreach ((array) config('entitlements.limits.products.'.$productSlug, []) as $key => $definition) {
-            $limits[(string) $key] = $this->normalise((string) $key, $definition);
+            $limits[(string) $key] = $this->normalise((string) $key, $definition, fromConfig: true);
         }
 
         if ($this->ready()) {
@@ -69,7 +70,7 @@ class LimitCatalog
 
         foreach (array_unique($productSlugs) as $slug) {
             foreach ((array) config('entitlements.limits.products.'.$slug, []) as $key => $definition) {
-                $result[$slug][(string) $key] = $this->normalise((string) $key, $definition);
+                $result[$slug][(string) $key] = $this->normalise((string) $key, $definition, fromConfig: true);
             }
         }
 
@@ -137,6 +138,15 @@ class LimitCatalog
         return $keys;
     }
 
+    /** The period anchor declared for a key, or null to use `limits.period_anchor`. */
+    public function anchor(string $key): ?string
+    {
+        $definition = config('entitlements.limits.keys.'.$key);
+        $anchor = is_array($definition) ? ($definition['anchor'] ?? null) : null;
+
+        return in_array($anchor, ['grant', 'calendar'], true) ? $anchor : null;
+    }
+
     public function label(string $key): string
     {
         $definition = config('entitlements.limits.keys.'.$key);
@@ -191,7 +201,7 @@ class LimitCatalog
     /**
      * @return array{value: int|null, period: string|null}
      */
-    private function normalise(string $key, mixed $definition): array
+    private function normalise(string $key, mixed $definition, bool $fromConfig = false): array
     {
         if (is_array($definition)) {
             $value = $definition['value'] ?? null;
@@ -201,6 +211,13 @@ class LimitCatalog
         } else {
             $value = $definition;
             $period = $this->defaultPeriod($key);
+        }
+
+        // ChoirLive's plans wrote unlimited as -1. Read that way from config,
+        // so a plan copied over as it is keeps meaning what it meant. Never
+        // stored: the table holds null for unlimited and nothing below 0.
+        if ($fromConfig && is_numeric($value) && (int) $value === -1) {
+            $value = null;
         }
 
         if ($value !== null && (! is_numeric($value) || (int) $value < 0)) {

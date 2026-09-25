@@ -121,8 +121,13 @@ return [
     'limits_key_twice' => 'Den Schlüssel :key gibt es in diesem Produkt schon.',
     'limits_empty_heading' => 'Noch keine Grenzen. Ein Zugang heißt bisher nur ja oder nein.',
     'limits_empty_create_description' => 'Zahlen an ein Produkt hängen: wie viele Analysen im Jahr, wie viele Projekte zugleich.',
-    'limits_fallback' => 'Ohne Zugang gilt: :product',
-    'limits_fallback_none' => 'Ohne Zugang ist jede Grenze null.',
+    'limits_fallback' => 'Wer keinen Zugang mit dieser Grenze hat, bekommt die Grenzen von :product.',
+    'limits_fallback_type' => 'Für :type ohne Zugang gilt :product.',
+    'limits_fallback_none' => 'Wer keinen Zugang mit dieser Grenze hat, darf 0 davon. Ein Produkt für alle ohne Zugang (etwa einen kostenlosen Plan) legst du in den Einstellungen fest.',
+    'limits_fallback_none_value' => 'nichts (0)',
+    'sources' => [
+        'manual' => 'Von Hand vergeben',
+    ],
 
     'quotas' => 'Kontingente',
     'quotas_none' => 'Für dieses Subjekt gilt keine Grenze.',

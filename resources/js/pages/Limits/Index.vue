@@ -21,6 +21,7 @@ const props = defineProps({
     createUrl: { type: String, required: true },
     canManage: { type: Boolean, default: false },
     fallbackProduct: { type: String, default: null },
+    fallbackByType: { type: Array, default: () => [] },
 });
 
 const isEmpty = computed(() => props.rows.length === 0);
@@ -70,6 +71,7 @@ const isEmpty = computed(() => props.rows.length === 0);
                         ? __('entitlements::cp.limits_fallback', { product: fallbackProduct })
                         : __('entitlements::cp.limits_fallback_none')
                 }}
+                <template v-for="line in fallbackByType" :key="line">{{ ' ' + line }}</template>
             </Description>
 
             <!-- Client mode: a site has a handful of products, not thousands. -->

@@ -142,13 +142,17 @@ derived on every read.
 
 ```php
 // Usage per period: counted here, reset with the term.
-if (! Entitlements::consume($user, 'analyses')) {
+$receipt = Entitlements::consume($team, 'analyses');   // UsageReceipt, or null when refused
+if (! $receipt) {
     return response()->json(['message' => 'Analysis quota exceeded.'], 403);
 }
-Entitlements::release($user, 'analyses');            // the job failed: give it back
+$job->quota_receipt = $receipt->toArray();              // keep it with the job
+
+// The job failed, maybe in the next period: give it back where it was booked.
+Entitlements::release($team, 'analyses', receipt: $job->quota_receipt);
 
 // Stock: the app counts, the addon decides.
-if (! Entitlements::withinLimit($user, 'arrangements', $tenant->projects()->count())) {
+if (! Entitlements::withinLimit($team, 'arrangements', $team->projects()->count())) {
     return response()->json(['message' => 'Project limit reached.'], 403);
 }
 
@@ -163,9 +167,35 @@ Entitlements::resetUsage($user, 'analyses', $actor);
 **Where usage is counted.** At the *holder*: the subject whose grant sets the limit. A choir member
 using the choir's plan books against the choir's counter, so "50 per year for the choir" means 50.
 
+**In a team context, pass the team as the subject, not the user.** This is binding, not a style
+choice. A person can be in several teams; asked about the person, the limits resolve over all of
+them, and among equally high teams the one with the smallest subject key wins (`team:10` before
+`team:9`, whatever order the expander returns). That is deterministic, but it is not "the team the
+person is working in right now" — only the caller knows that. `withinLimit()` records a stock count
+only when the subject passed *is* the holder; a member's own count never overwrites a team's.
+
+**Releasing.** `consume()` returns a `UsageReceipt` (holder, key, period, amount, brand; scalars,
+`toArray()`/`fromArray()` for a queue or a column). `release(..., receipt: $receipt)` gives the
+booking back into exactly that counter, once. Without a receipt a release only reaches the current
+period of the current holder; when that holds less than asked (a March booking released in April),
+nothing changes and a warning is logged.
+
+**Without a grant.** `limits.fallback_products` per subject type (`['personal_team' => 'free']`),
+then `limits.fallback_product` for everybody, or decide in code with
+`Entitlements::fallbackUsing(fn (SubjectReference $s) => $s->type === 'personal_team' ? 'free' : null)`
+(a null from the callback means none). Otherwise 0.
+
+**-1.** In `limits.products` (config) `-1` is read as unlimited, so plans copied from ChoirLive keep
+their meaning. In the database and through `setLimits()`/the Control Panel unlimited is `null`, and
+`-1` is refused.
+
 **Periods.** `month` or `year`, anchored on the start of the grant that sets the limit (a yearly plan
-bought on 14 March resets on 14 March), or on calendar months and years with
-`period_anchor = calendar`. The fallback product always uses calendar periods.
+bought on 14 March resets on 14 March), or on calendar months and years with the anchor `calendar`,
+per key (`limits.keys.analyses.anchor`) or for all (`limits.period_anchor`). With `grant`, a plan
+change starts a new period: an upgrade in June brings a fresh counter, as a term-based plan is sold.
+With `calendar` the counter belongs to the holder and the year, not to the plan: an upgrade keeps
+what was used and only raises the limit (ChoirLive's analyses). The fallback product always uses
+calendar periods.
 `entitlements:announce` announces a period that ended with something used (`UsageReset`, reason
 `period`).
 
@@ -187,6 +217,11 @@ Entitlements::extendSubjects(fn ($subject, SubjectReference $ref) => [new Subjec
 Applies to `decide()`, `allows()`, `activeProductSlugsFor()` and every limit. **Not** to
 `forSubject()`, `renew()` or any write: a refund against a person must never revoke the team's grant.
 One level deep, never recursive; an expander that throws is logged and skipped.
+
+Siblings that query grants themselves do not see expanded subjects: statamic-courses'
+`EntitlementsCourseAccess::allowsExcept()` builds on `forSubject()` directly, so a team's course
+grant does not open the course for a member there until courses moves to
+`forSubjects(Entitlements::subjectsOf($user))`.
 
 ## States
 

@@ -58,7 +58,7 @@ it('takes the highest value over several grants, and unlimited above any number'
 it('gives nobody anything without a grant, and the fallback product when one is set', function () {
     expect(Entitlements::limit($this->anna, 'analyses'))->toBe(0)
         ->and(Entitlements::quota($this->anna, 'analyses')->source)->toBe(Quota::SOURCE_NONE)
-        ->and(Entitlements::consume($this->anna, 'analyses'))->toBeFalse();
+        ->and(Entitlements::consume($this->anna, 'analyses'))->toBeNull();
 
     Entitlements::setLimits('free', ['analyses' => 2]);
     config()->set('entitlements.limits.fallback_product', 'free');
@@ -84,10 +84,10 @@ it('counts usage, refuses past the limit and announces the limit exactly once', 
     Entitlements::setLimits('solo', ['analyses' => 3]);
     Entitlements::grant($this->anna, 'solo', 'manual');
 
-    expect(Entitlements::consume($this->anna, 'analyses'))->toBeTrue()
-        ->and(Entitlements::consume($this->anna, 'analyses', 2))->toBeTrue()
-        ->and(Entitlements::consume($this->anna, 'analyses'))->toBeFalse()
-        ->and(Entitlements::consume($this->anna, 'analyses'))->toBeFalse()
+    expect(Entitlements::consume($this->anna, 'analyses'))->not->toBeNull()
+        ->and(Entitlements::consume($this->anna, 'analyses', 2))->not->toBeNull()
+        ->and(Entitlements::consume($this->anna, 'analyses'))->toBeNull()
+        ->and(Entitlements::consume($this->anna, 'analyses'))->toBeNull()
         ->and(Entitlements::remaining($this->anna, 'analyses'))->toBe(0);
 
     Event::assertDispatchedTimes(UsageConsumed::class, 2);
@@ -103,9 +103,9 @@ it('never books more than the limit in one go', function () {
     Entitlements::setLimits('solo', ['analyses' => 3]);
     Entitlements::grant($this->anna, 'solo', 'manual');
 
-    expect(Entitlements::consume($this->anna, 'analyses', 4))->toBeFalse()
-        ->and(Entitlements::consume($this->anna, 'analyses', 2))->toBeTrue()
-        ->and(Entitlements::consume($this->anna, 'analyses', 2))->toBeFalse()
+    expect(Entitlements::consume($this->anna, 'analyses', 4))->toBeNull()
+        ->and(Entitlements::consume($this->anna, 'analyses', 2))->not->toBeNull()
+        ->and(Entitlements::consume($this->anna, 'analyses', 2))->toBeNull()
         ->and(Entitlements::quota($this->anna, 'analyses')->used)->toBe(2);
 });
 
@@ -125,7 +125,7 @@ it('lets only one of two bookings take the last slot, even when both read it as 
 
     expect($first->remaining())->toBe(1)->and($second->remaining())->toBe(1);
 
-    $results = [Entitlements::consume($this->anna, 'analyses'), Entitlements::consume($this->anna, 'analyses')];
+    $results = [Entitlements::consume($this->anna, 'analyses') !== null, Entitlements::consume($this->anna, 'analyses') !== null];
 
     expect($results)->toBe([true, false])
         ->and(Usage::query()->count())->toBe(1)
@@ -201,7 +201,7 @@ it('gives back what a failed job booked, and makes the limit reachable again', f
     expect(Entitlements::release($this->anna, 'analyses'))->toBeTrue()
         ->and(Entitlements::release($this->anna, 'analyses'))->toBeFalse()
         ->and(Entitlements::remaining($this->anna, 'analyses'))->toBe(1)
-        ->and(Entitlements::consume($this->anna, 'analyses'))->toBeTrue();
+        ->and(Entitlements::consume($this->anna, 'analyses'))->not->toBeNull();
 
     Event::assertDispatchedTimes(LimitReached::class, 2);
 });
@@ -225,7 +225,7 @@ it('starts a fresh counter when the grant\'s year turns', function () {
     Entitlements::grant($this->anna, 'solo', 'manual');
     Entitlements::consume($this->anna, 'analyses', 10);
 
-    expect(Entitlements::consume($this->anna, 'analyses'))->toBeFalse();
+    expect(Entitlements::consume($this->anna, 'analyses'))->toBeNull();
 
     $quota = Entitlements::quota($this->anna, 'analyses');
     expect($quota->periodStart->format('Y-m-d'))->toBe('2026-03-14')
@@ -234,7 +234,7 @@ it('starts a fresh counter when the grant\'s year turns', function () {
     $this->travelTo(now()->setDate(2027, 3, 14)->setTime(12, 0));
 
     expect(Entitlements::remaining($this->anna, 'analyses'))->toBe(10)
-        ->and(Entitlements::consume($this->anna, 'analyses'))->toBeTrue()
+        ->and(Entitlements::consume($this->anna, 'analyses'))->not->toBeNull()
         ->and(Usage::query()->count())->toBe(2);
 });
 

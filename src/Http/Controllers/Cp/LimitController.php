@@ -3,6 +3,7 @@
 namespace Goldnead\Entitlements\Http\Controllers\Cp;
 
 use Goldnead\Entitlements\Limits\LimitCatalog;
+use Goldnead\Entitlements\Limits\QuotaManager;
 use Goldnead\Entitlements\Models\Entitlement;
 use Goldnead\Entitlements\Support\Blueprints;
 use Goldnead\Entitlements\Support\Setup;
@@ -34,7 +35,7 @@ class LimitController extends Controller
     {
         Gate::authorize('view entitlements');
 
-        if ($setup = Setup::guard(__('entitlements::cp.limits_title'), 'entitlements', 'entitlement_limits', 'entitlement_usages')) {
+        if ($setup = Setup::guard(__('entitlements::cp.limits_title'), 'entitlements', 'entitlement_limits', 'entitlement_usages', 'entitlement_usage_releases')) {
             return $setup;
         }
 
@@ -76,7 +77,14 @@ class LimitController extends Controller
             ],
             'createUrl' => cp_route('entitlements.limits.create'),
             'canManage' => $canManage,
-            'fallbackProduct' => config('entitlements.limits.fallback_product'),
+            'fallbackProduct' => app(QuotaManager::class)->fallbackProduct(),
+            'fallbackByType' => collect((array) config('entitlements.limits.fallback_products', []))
+                ->map(fn ($slug, $type) => __('entitlements::cp.limits_fallback_type', [
+                    'type' => $type,
+                    'product' => is_string($slug) && $slug !== '' ? $slug : __('entitlements::cp.limits_fallback_none_value'),
+                ]))
+                ->values()
+                ->all(),
         ]);
     }
 

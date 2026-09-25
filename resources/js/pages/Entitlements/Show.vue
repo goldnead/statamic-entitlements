@@ -174,7 +174,10 @@ const badgeColour = {
                         </div>
                         <div class="py-3 flex flex-wrap gap-2 justify-between">
                             <dt class="text-gray-500">{{ __('entitlements::cp.stored_status') }}</dt>
-                            <dd class="font-mono text-sm">{{ entitlement.status }}</dd>
+                            <dd class="text-sm">
+                                {{ entitlement.status_label || entitlement.status }}
+                                <code v-if="entitlement.status_label && entitlement.status_label !== entitlement.status" class="text-2xs text-gray-600 dark:text-gray-400 ms-1">{{ entitlement.status }}</code>
+                            </dd>
                         </div>
                         <div v-if="entitlement.revoked_reason" class="py-3">
                             <dt class="text-gray-500">{{ __('entitlements::cp.revocation_reason') }}</dt>
@@ -242,7 +245,10 @@ const badgeColour = {
                         <TableCell class="tabular-nums">{{ quotaLimit(quota) }}</TableCell>
                         <TableCell class="tabular-nums">
                             <span v-if="quota.used !== null">{{ quota.used }}</span>
-                            <span v-else class="text-xs text-gray-500 dark:text-gray-400">{{ __('entitlements::cp.quota_stock_uncounted') }}</span>
+                            <!-- Only a stock limit that applies is counted by the app;
+                                 without access there is nothing anybody counts. -->
+                            <span v-else-if="quota.kind === 'stock' && quota.source !== 'none'" class="text-xs text-gray-500 dark:text-gray-400">{{ __('entitlements::cp.quota_stock_uncounted') }}</span>
+                            <span v-else class="text-gray-500 dark:text-gray-400">&mdash;</span>
                         </TableCell>
                         <TableCell class="tabular-nums">
                             <Badge

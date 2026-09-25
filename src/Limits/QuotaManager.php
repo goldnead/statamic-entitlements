@@ -15,6 +15,7 @@ use Goldnead\IdentityContracts\Identity;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use LogicException;
 
@@ -94,7 +95,7 @@ class QuotaManager
             $keys = [...$keys, ...array_keys($limits)];
         }
 
-        $fallback = $this->fallbackProduct();
+        $fallback = $this->fallbackProduct($this->entitlements()->subjectsOf($subject)[0]);
 
         if ($fallback !== null) {
             $keys = [...$keys, ...array_keys($this->catalog->forProduct($fallback))];
@@ -112,20 +113,24 @@ class QuotaManager
         return $quotas;
     }
 
-    public function consume(mixed $subject, string $key, int $amount = 1): bool
+    /**
+     * Book against a usage limit. The receipt on success, null when refused —
+     * so `if (! consume(...))` reads as it always did.
+     */
+    public function consume(mixed $subject, string $key, int $amount = 1): ?UsageReceipt
     {
         if ($amount < 1) {
             throw new InvalidArgumentException('Consume at least 1.');
         }
 
         if (! $this->ready()) {
-            return false;
+            return null;
         }
 
         $quota = $this->resolve($subject, $key);
 
         if ($quota->source === Quota::SOURCE_NONE || $quota->holder === null) {
-            return false;
+            return null;
         }
 
         if ($quota->kind === Quota::KIND_STOCK) {
@@ -135,7 +140,7 @@ class QuotaManager
         }
 
         if ($quota->limit !== null && $amount > $quota->limit) {
-            return false;
+            return null;
         }
 
         $row = $this->counter($quota);
@@ -152,7 +157,7 @@ class QuotaManager
         ]) === 1;
 
         if (! $won) {
-            return false;
+            return null;
         }
 
         $used = (int) Usage::query()->whereKey($row->getKey())->value('used');
@@ -178,12 +183,34 @@ class QuotaManager
             $this->announceReached($row, $quota, $own, $used, $now);
         }
 
-        return true;
+        return new UsageReceipt(
+            id: (string) Str::uuid(),
+            holderType: $quota->holder->type,
+            holderId: $quota->holder->id,
+            key: $key,
+            periodKey: $row->period_key,
+            amount: $amount,
+            brandId: (int) $row->brand_id,
+        );
     }
 
-    public function release(mixed $subject, string $key, int $amount = 1): bool
+    /**
+     * Give back what a booking took.
+     *
+     * With the booking's receipt, into exactly the counter it went to — the
+     * period it was booked in, at the holder that held it — and once only.
+     * `$subject` and `$key` are not consulted then; the receipt decides.
+     *
+     * Without one, only into the current period of the current holder, and
+     * only as much as that period holds: a booking from last month cannot be
+     * found without its receipt, so rather than lowering the wrong month this
+     * does nothing and logs a warning.
+     *
+     * @param  UsageReceipt|array<string, mixed>|null  $receipt
+     */
+    public function release(mixed $subject, string $key, ?int $amount = null, UsageReceipt|array|null $receipt = null): bool
     {
-        if ($amount < 1) {
+        if ($amount !== null && $amount < 1) {
             throw new InvalidArgumentException('Release at least 1.');
         }
 
@@ -191,6 +218,11 @@ class QuotaManager
             return false;
         }
 
+        if ($receipt !== null) {
+            return $this->releaseReceipt(is_array($receipt) ? UsageReceipt::fromArray($receipt) : $receipt, $amount);
+        }
+
+        $amount ??= 1;
         $quota = $this->resolve($subject, $key);
 
         if ($quota->kind === Quota::KIND_STOCK || $quota->holder === null) {
@@ -199,20 +231,76 @@ class QuotaManager
 
         $row = $this->findCounter($quota);
 
-        if ($row === null) {
-            return false;
-        }
-
-        $won = Usage::query()
+        $won = $row !== null && Usage::query()
             ->whereKey($row->getKey())
             ->where('used', '>=', $amount)
             ->update(['used' => DB::raw('used - '.$amount)]) === 1;
 
-        if ($won) {
-            $this->clearReached($row, $quota->limit);
+        if (! $won) {
+            Log::warning('statamic-entitlements: a release without a receipt found nothing to give back in the current period; nothing was changed. Pass the receipt consume() returned.', [
+                'holder' => $quota->holder->key(),
+                'key' => $key,
+                'amount' => $amount,
+            ]);
+
+            return false;
         }
 
-        return $won;
+        $this->clearReached($row, $quota->limit);
+
+        return true;
+    }
+
+    private function releaseReceipt(UsageReceipt $receipt, ?int $amount): bool
+    {
+        $amount = min($amount ?? $receipt->amount, $receipt->amount);
+
+        $row = Usage::query()
+            ->forBrand($receipt->brandId)
+            ->where('subject_type', $receipt->holderType)
+            ->where('subject_id', $receipt->holderId)
+            ->where('limit_key', $receipt->key)
+            ->where('period_key', $receipt->periodKey)
+            ->first();
+
+        if ($row === null) {
+            return false;
+        }
+
+        // The claim: one row per receipt, refused by the unique index the
+        // second time. insertOrIgnore, not a caught INSERT (see the class
+        // docblock on Postgres transactions).
+        $claimed = DB::table('entitlement_usage_releases')->insertOrIgnore([
+            'brand_id' => $receipt->brandId,
+            'receipt_id' => mb_substr($receipt->id, 0, 64),
+            'usage_id' => $row->getKey(),
+            'amount' => $amount,
+            'created_at' => CarbonImmutable::now('UTC')->format('Y-m-d H:i:s'),
+        ]) === 1;
+
+        if (! $claimed) {
+            return false;
+        }
+
+        // Never below zero: a counter reset by hand in between already gave
+        // everything back.
+        $lowered = Usage::query()->forBrand($receipt->brandId)->whereKey($row->getKey())
+            ->where('used', '>=', $amount)
+            ->update(['used' => DB::raw('used - '.$amount)]) === 1;
+
+        if (! $lowered) {
+            Usage::query()->forBrand($receipt->brandId)->whereKey($row->getKey())->update(['used' => 0]);
+        }
+
+        $query = Usage::query()->forBrand($receipt->brandId)->whereKey($row->getKey())->whereNotNull('reached_at');
+
+        if ($row->limit_value !== null) {
+            $query->where('used', '<', $row->limit_value);
+        }
+
+        $query->update(['reached_at' => null]);
+
+        return true;
     }
 
     public function withinLimit(mixed $subject, string $key, int $current, int $adding = 1): bool
@@ -237,7 +325,14 @@ class QuotaManager
 
         $fits = $quota->limit === null || $current + $adding <= $quota->limit;
 
-        if (! $this->ready()) {
+        // Recorded only when the caller counted for the holder itself. A
+        // member asking with their own count (their projects, not the
+        // team's) would overwrite the team's figure with a smaller one, and
+        // with two teams it would be anybody's guess which team it lands on.
+        // In a team context, pass the team.
+        $own = $this->entitlements()->subjectsOf($subject)[0];
+
+        if (! $this->ready() || ! $quota->holder->equals($own)) {
             return $fits;
         }
 
@@ -342,7 +437,11 @@ class QuotaManager
                 'value' => $definition['value'],
                 'period' => $definition['period'],
                 'grant' => $grant,
-                'rank' => $rank[$grant->subjectKey()] ?? PHP_INT_MAX,
+                // 0 for the subject's own grant, 1 for every subject it acts
+                // for: expanders may return teams in any order, so their
+                // order must not decide anything.
+                'rank' => ($rank[$grant->subjectKey()] ?? PHP_INT_MAX) === 0 ? 0 : 1,
+                'holder' => $grant->subjectKey(),
             ];
 
             if ($best === null || $this->beats($candidate, $best)) {
@@ -354,7 +453,7 @@ class QuotaManager
             /** @var Entitlement $grant */
             $grant = $best['grant'];
             $anchor = $grant->starts_at ?? CarbonImmutable::parse($grant->getAttribute('created_at'))->utc();
-            [$start, $end] = $this->window($best['period'], $anchor, $now);
+            [$start, $end] = $this->window($best['period'], $anchor, $now, $this->catalog->anchor($key));
 
             return new Quota(
                 key: $key,
@@ -370,7 +469,7 @@ class QuotaManager
             );
         }
 
-        $fallback = $this->fallbackProduct();
+        $fallback = $this->fallbackProduct($subjects[0]);
         $definition = $fallback !== null ? ($this->catalog->forProduct($fallback)[$key] ?? null) : null;
 
         if ($definition !== null) {
@@ -409,9 +508,17 @@ class QuotaManager
      *
      * Anchored on the start of the grant that sets the limit, so a yearly plan
      * bought on 14 March resets on 14 March — "with the term", as the plan was
-     * sold. Without a grant (the fallback product), or with
-     * `entitlements.limits.period_anchor = calendar`, calendar months and years
-     * in the application timezone.
+     * sold. Without a grant (the fallback product), or with the anchor
+     * `calendar` (per key in `limits.keys.<key>.anchor`, else
+     * `limits.period_anchor`), calendar months and years in the application
+     * timezone.
+     *
+     * The trade-off, decided 25.09.2026: with `grant`, a plan change starts a
+     * new period, because the new grant has a new start — an upgrade in June
+     * brings a fresh counter. That is how a term-based plan is sold. Where the
+     * allowance belongs to the year and not to the plan (ChoirLive's analyses),
+     * set the key to `calendar`: the counter is kept per holder and period,
+     * not per product, so it carries over an upgrade and only the limit rises.
      *
      * Months are added without overflow and always from the anchor, never from
      * the previous period: 31 January + 1 month is 28 February, and the period
@@ -419,7 +526,7 @@ class QuotaManager
      *
      * @return array{0: CarbonImmutable|null, 1: CarbonImmutable|null}
      */
-    public function window(?string $period, ?CarbonImmutable $anchor, CarbonImmutable $now): array
+    public function window(?string $period, ?CarbonImmutable $anchor, CarbonImmutable $now, ?string $mode = null): array
     {
         if ($period === null) {
             return [null, null];
@@ -427,7 +534,10 @@ class QuotaManager
 
         $months = $period === 'year' ? 12 : 1;
 
-        if ($anchor === null || config('entitlements.limits.period_anchor', 'grant') === 'calendar') {
+        // Per key (`limits.keys.<key>.anchor`) before the global setting.
+        $mode ??= config('entitlements.limits.period_anchor', 'grant');
+
+        if ($anchor === null || $mode === 'calendar') {
             $local = $now->setTimezone((string) config('app.timezone', 'UTC'));
             $start = $period === 'year' ? $local->startOfYear() : $local->startOfMonth();
 
@@ -464,18 +574,48 @@ class QuotaManager
         return $start === null ? 'stock' : $start->utc()->format('Y-m-d\TH:i:s\Z');
     }
 
-    public function fallbackProduct(): ?string
+    /**
+     * The product that applies to a subject without a grant carrying the key.
+     *
+     * In this order: the callback from `fallbackUsing()` (its null is a
+     * decision: none), then `limits.fallback_products[<subject type>]`, then
+     * `limits.fallback_product` for everybody. Without a subject only the last.
+     */
+    public function fallbackProduct(?SubjectReference $subject = null): ?string
     {
-        $fallback = config('entitlements.limits.fallback_product');
+        if ($subject !== null && $this->fallbackResolver !== null) {
+            return $this->slug(($this->fallbackResolver)($subject));
+        }
 
-        return is_string($fallback) && trim($fallback) !== '' ? trim($fallback) : null;
+        if ($subject !== null) {
+            $byType = (array) config('entitlements.limits.fallback_products', []);
+
+            if (array_key_exists($subject->type, $byType)) {
+                return $this->slug($byType[$subject->type]);
+            }
+        }
+
+        return $this->slug(config('entitlements.limits.fallback_product'));
+    }
+
+    /** @param  (callable(SubjectReference): ?string)|null  $resolver */
+    public function fallbackUsing(?callable $resolver): void
+    {
+        $this->fallbackResolver = $resolver === null ? null : $resolver(...);
+    }
+
+    private ?\Closure $fallbackResolver = null;
+
+    private function slug(mixed $value): ?string
+    {
+        return is_string($value) && trim($value) !== '' ? trim($value) : null;
     }
 
     // --------------------------------------------------------------- internals
 
     /**
-     * @param  array{value: int|null, rank: int, grant: Entitlement}  $candidate
-     * @param  array{value: int|null, rank: int, grant: Entitlement}  $best
+     * @param  array{value: int|null, rank: int, holder: string, grant: Entitlement}  $candidate
+     * @param  array{value: int|null, rank: int, holder: string, grant: Entitlement}  $best
      */
     private function beats(array $candidate, array $best): bool
     {
@@ -491,7 +631,15 @@ class QuotaManager
             return $candidate['value'] > $best['value'];
         }
 
-        return $candidate['rank'] < $best['rank'];
+        if ($candidate['rank'] !== $best['rank']) {
+            return $candidate['rank'] < $best['rank'];
+        }
+
+        // Several teams at equal height: the smallest subject key, byte by
+        // byte ("team:10" before "team:9"), whatever order they arrived in.
+        // Grants are read ordered by id, so within one holder the oldest
+        // grant stays.
+        return strcmp($candidate['holder'], $best['holder']) < 0;
     }
 
     private function readUsed(Quota $quota): int

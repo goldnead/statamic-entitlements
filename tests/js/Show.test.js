@@ -171,6 +171,21 @@ describe('the entitlement detail screen', () => {
             });
         });
 
+        it('says "counted by the app" only for a stock limit that applies', () => {
+            const none = { ...quota, key: 'exports', label: 'exports', kind: 'stock', used: null, source: 'none', limit: 0, can_reset: false };
+            const stock = { ...quota, key: 'arrangements', label: 'arrangements', kind: 'stock', used: null, source: 'grant', can_reset: false };
+            const wrapper = mount(Show, { props: { ...withQuotas, quotas: [none, stock] } });
+
+            expect(wrapper.find('[data-key="exports"]').text()).not.toContain('entitlements::cp.quota_stock_uncounted');
+            expect(wrapper.find('[data-key="arrangements"]').text()).toContain('entitlements::cp.quota_stock_uncounted');
+        });
+
+        it('shows the stored status in words', () => {
+            const wrapper = mount(Show, { props: { ...withQuotas, entitlement: { ...entitlement, status_label: 'Aktiv' } } });
+
+            expect(wrapper.text()).toContain('Aktiv');
+        });
+
         it('offers no reset without the permission', () => {
             const wrapper = mount(Show, { props: { ...withQuotas, quotas: [{ ...quota, can_reset: false }] } });
 

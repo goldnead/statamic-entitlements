@@ -16,6 +16,7 @@ use Goldnead\Entitlements\Facades\Entitlements;
 use Goldnead\Entitlements\Limits\LimitCatalog;
 use Goldnead\Entitlements\Limits\Quota;
 use Goldnead\Entitlements\Limits\QuotaManager;
+use Goldnead\Entitlements\Limits\UsageReceipt;
 use Goldnead\Entitlements\Mail\SendLimitReachedMail;
 use Goldnead\Entitlements\Models\Entitlement;
 use Goldnead\Entitlements\Support\AccessDecision;
@@ -578,16 +579,39 @@ class EntitlementManager
         return $this->quotas()->quota($subject, $key, $current)->remaining();
     }
 
-    /** Book `$amount` against a usage limit, atomically. False means refused. */
-    public function consume(mixed $subject, string $key, int $amount = 1): bool
+    /**
+     * Book `$amount` against a usage limit, atomically. The receipt on success
+     * (keep it with the job, to give the booking back into its own period),
+     * null when refused.
+     */
+    public function consume(mixed $subject, string $key, int $amount = 1): ?UsageReceipt
     {
         return $this->quotas()->consume($subject, $key, $amount);
     }
 
-    /** Give back what a failed job booked. False when there was nothing to give back. */
-    public function release(mixed $subject, string $key, int $amount = 1): bool
+    /**
+     * Give back what a failed job booked. With the receipt, into the period and
+     * holder of the booking, once; without, only within the current period.
+     * False when there was nothing to give back.
+     *
+     * @param  UsageReceipt|array<string, mixed>|null  $receipt
+     */
+    public function release(mixed $subject, string $key, ?int $amount = null, UsageReceipt|array|null $receipt = null): bool
     {
-        return $this->quotas()->release($subject, $key, $amount);
+        return $this->quotas()->release($subject, $key, $amount, $receipt);
+    }
+
+    /**
+     * Which product applies to a subject without a grant carrying the key.
+     * Takes the subject's reference, returns a product slug or null for none;
+     * decides before `limits.fallback_products` and `limits.fallback_product`.
+     * Null removes the callback.
+     *
+     * @param  (callable(SubjectReference): ?string)|null  $resolver
+     */
+    public function fallbackUsing(?callable $resolver): void
+    {
+        $this->quotas()->fallbackUsing($resolver);
     }
 
     /**

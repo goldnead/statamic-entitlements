@@ -233,10 +233,17 @@ class ServiceProvider extends AddonServiceProvider
                 ->can('view entitlements')
                 // Children, so the two new screens get breadcrumbs and a place
                 // in the sidebar without a second top-level entry.
+                // "Grants" comes last on purpose. Its URL is the prefix of the
+                // other two, so core's URL pattern marks it active on their
+                // pages as well, and the breadcrumb takes the first active
+                // child. Last, it only wins where nothing more specific does:
+                // the listing and a grant's own page. (NavItem has no setter
+                // for the pattern; without the child a grant's page had no
+                // breadcrumb at all.)
                 ->children(fn () => [
-                    $nav->item(__('entitlements::cp.nav_grants'))->route('entitlements.index')->can('view entitlements'),
                     $nav->item(__('entitlements::cp.limits_title'))->route('entitlements.limits.index')->can('view entitlements'),
                     $nav->item(__('entitlements::cp.wiring_title'))->route('entitlements.wiring')->can('view entitlements'),
+                    $nav->item(__('entitlements::cp.nav_grants'))->route('entitlements.index')->can('view entitlements'),
                 ]);
         });
 

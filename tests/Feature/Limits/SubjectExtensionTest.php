@@ -46,8 +46,8 @@ it('counts a member\'s usage at the team, so the team\'s allowance is shared', f
     Entitlements::consume($this->anna, 'analyses', 2);
 
     expect(Entitlements::remaining($this->ben, 'analyses'))->toBe(1)
-        ->and(Entitlements::consume($this->ben, 'analyses', 2))->toBeFalse()
-        ->and(Entitlements::consume($this->ben, 'analyses'))->toBeTrue()
+        ->and(Entitlements::consume($this->ben, 'analyses', 2))->toBeNull()
+        ->and(Entitlements::consume($this->ben, 'analyses'))->not->toBeNull()
         ->and(Usage::query()->pluck('subject_type')->all())->toBe(['team']);
 });
 

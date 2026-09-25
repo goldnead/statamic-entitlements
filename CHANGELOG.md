@@ -29,6 +29,14 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Control Panel: limits per product, the subject's limits on a grant with a reset, and a wiring page.
   New permission `manage entitlements limits`.
 - A Statamic user (file or Eloquent repository) is accepted as a subject.
+- `consume()` returns a `UsageReceipt` (null when refused); `release(..., receipt:)` gives a booking
+  back into its own period and holder, once (table `entitlement_usage_releases`). Without a receipt
+  a release stays in the current period and logs when it finds nothing.
+- Fallback product per subject type (`limits.fallback_products`) and `Entitlements::fallbackUsing()`.
+- `-1` in `limits.products` reads as unlimited; stored limits refuse it.
+- Period anchor per key (`limits.keys.<key>.anchor`).
+- Several teams at equal height resolve to the smallest subject key; `withinLimit()` records a
+  count only for the holder itself.
 
 ### Fixed
 

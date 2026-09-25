@@ -128,7 +128,7 @@ it('lets exactly one of two simultaneous bookings take the last slot', function 
         Entitlements::grant($anna, 'race-plan', 'manual');
 
         // Round 1: the counter exists already, both race the UPDATE.
-        expect(Entitlements::consume($anna, 'exports', 2))->toBeTrue();
+        expect(Entitlements::consume($anna, 'exports', 2))->not->toBeNull();
 
         $results = raceInChildren(2, fn () => Entitlements::consume($anna, 'exports'));
 
@@ -157,9 +157,9 @@ it('survives a booking inside the caller\'s own transaction on Postgres', functi
     Entitlements::grant($anna, 'tx-plan', 'manual');
 
     DB::transaction(function () use ($anna) {
-        expect(Entitlements::consume($anna, 'analyses'))->toBeTrue();
+        expect(Entitlements::consume($anna, 'analyses'))->not->toBeNull();
         // Second booking hits the existing counter; insertOrIgnore yields.
-        expect(Entitlements::consume($anna, 'analyses'))->toBeTrue();
+        expect(Entitlements::consume($anna, 'analyses'))->not->toBeNull();
         expect(DB::table('entitlements')->where('subject_id', 'tx-1')->count())->toBe(1);
     });
 

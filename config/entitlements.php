@@ -74,21 +74,30 @@ return [
     |
     | `fallback_product` applies to everybody without a grant that carries the
     | key: a free plan. Null means no grant, no limit (0).
+    | `fallback_products` does the same per subject type and wins over it:
+    | ['personal_team' => 'free', 'team' => null] gives personal workspaces
+    | the free plan and choirs without a subscription nothing.
+    | `Entitlements::fallbackUsing()` decides before both.
     |
     | `period_anchor`: `grant` starts a yearly period on the day the plan was
-    | bought, `calendar` on 1 January (application timezone).
+    | bought, `calendar` on 1 January (application timezone). Per key with
+    | `keys.<key>.anchor`. With `grant` a plan change starts a new period.
+    |
+    | In `products`, -1 is read as unlimited (ChoirLive's plans used it). The
+    | Control Panel and setLimits() take null for that and refuse -1.
     |
     */
 
     'limits' => [
         'keys' => [
-            // 'analyses' => ['label' => 'Analyses', 'period' => 'year'],
+            // 'analyses' => ['label' => 'Analyses', 'period' => 'year', 'anchor' => 'calendar'],
             // 'arrangements' => ['label' => 'Active arrangements'],
         ],
         'products' => [
             // 'free' => ['analyses' => 10, 'arrangements' => 3],
         ],
         'fallback_product' => null,
+        'fallback_products' => [],
         'period_anchor' => 'grant',
     ],
 

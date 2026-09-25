@@ -28,7 +28,21 @@ class SourceRegistry
 
     public function label(string $source): string
     {
-        return $this->all()[$source] ?? $source;
+        $configured = $this->all()[$source] ?? null;
+
+        // The shipped `manual` label is English in the config file. Unless a
+        // site gave it a label of its own, the translation wins, so a German
+        // CP does not read "Manual grant".
+        if ($configured === null || $configured === 'Manual grant') {
+            $key = 'entitlements::cp.sources.'.$source;
+            $translated = __($key);
+
+            if (is_string($translated) && $translated !== $key) {
+                return $translated;
+            }
+        }
+
+        return $configured ?? $source;
     }
 
     /**

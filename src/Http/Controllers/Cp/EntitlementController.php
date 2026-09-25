@@ -153,6 +153,7 @@ class EntitlementController extends Controller
                 'source_label' => app(SourceRegistry::class)->label($model->source),
                 'source_ref' => $model->hasSourceRef() ? $model->source_ref : null,
                 'status' => $model->status,
+                'status_label' => EntitlementState::tryFrom((string) $model->status)?->label() ?? $model->status,
                 'state' => $state->value,
                 'state_label' => $state->label(),
                 'grants_access' => $state->grantsAccess(),
