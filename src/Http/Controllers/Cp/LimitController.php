@@ -35,7 +35,7 @@ class LimitController extends Controller
     {
         Gate::authorize('view entitlements');
 
-        if ($setup = Setup::guard(__('entitlements::cp.limits_title'), 'entitlements', 'entitlement_limits', 'entitlement_usages', 'entitlement_usage_releases')) {
+        if ($setup = Setup::guard(__('entitlements::cp.limits_title'), 'entitlements', 'entitlement_limits', 'entitlement_usages', 'entitlement_usage_receipts')) {
             return $setup;
         }
 

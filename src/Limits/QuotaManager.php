@@ -9,6 +9,7 @@ use Goldnead\Entitlements\Events\UsageConsumed;
 use Goldnead\Entitlements\Events\UsageReset;
 use Goldnead\Entitlements\Models\Entitlement;
 use Goldnead\Entitlements\Models\Usage;
+use Goldnead\Entitlements\Models\UsageReceiptRecord;
 use Goldnead\Entitlements\Support\StateResolver;
 use Goldnead\Entitlements\Support\SubjectReference;
 use Goldnead\IdentityContracts\Identity;
@@ -151,10 +152,36 @@ class QuotaManager
             $booking->where('used', '<=', $quota->limit - $amount);
         }
 
-        $won = $booking->update([
-            'used' => DB::raw('used + '.$amount),
-            'limit_value' => $quota->limit,
-        ]) === 1;
+        $receiptId = (string) Str::uuid();
+
+        // The booking and the server's copy of its receipt together, or
+        // neither: a receipt without its booking would give back what was
+        // never taken, a booking without its receipt could never be given back.
+        $won = DB::transaction(function () use ($booking, $amount, $quota, $row, $receiptId, $key): bool {
+            $won = $booking->update([
+                'used' => DB::raw('used + '.$amount),
+                'limit_value' => $quota->limit,
+            ]) === 1;
+
+            if (! $won || $quota->holder === null) {
+                return false;
+            }
+
+            UsageReceiptRecord::query()->insert([
+                'id' => $receiptId,
+                'brand_id' => (int) $row->brand_id,
+                'usage_id' => $row->getKey(),
+                'subject_type' => $quota->holder->type,
+                'subject_id' => $quota->holder->id,
+                'limit_key' => $key,
+                'period_key' => $row->period_key,
+                'amount' => $amount,
+                'released' => 0,
+                'created_at' => CarbonImmutable::now('UTC')->format('Y-m-d H:i:s'),
+            ]);
+
+            return true;
+        });
 
         if (! $won) {
             return null;
@@ -184,7 +211,7 @@ class QuotaManager
         }
 
         return new UsageReceipt(
-            id: (string) Str::uuid(),
+            id: $receiptId,
             holderType: $quota->holder->type,
             holderId: $quota->holder->id,
             key: $key,
@@ -219,7 +246,7 @@ class QuotaManager
         }
 
         if ($receipt !== null) {
-            return $this->releaseReceipt(is_array($receipt) ? UsageReceipt::fromArray($receipt) : $receipt, $amount);
+            return $this->releaseReceipt($subject, $key, UsageReceipt::idOf($receipt), $amount);
         }
 
         $amount ??= 1;
@@ -251,56 +278,80 @@ class QuotaManager
         return true;
     }
 
-    private function releaseReceipt(UsageReceipt $receipt, ?int $amount): bool
+    /**
+     * Give back through the server's copy of the receipt, never through what
+     * the caller presents: only the id is taken from it.
+     *
+     * The stored row must be in the current brand (the brand scope, no
+     * `forBrand()`), for the key asked about, and held by the subject or one it
+     * acts for. The amount is at least 1 and at most what the receipt has left.
+     * Claim and deduction run in one transaction, and the deduction is one
+     * UPDATE that cannot go below zero.
+     */
+    private function releaseReceipt(mixed $subject, string $key, string $receiptId, ?int $amount): bool
     {
-        $amount = min($amount ?? $receipt->amount, $receipt->amount);
+        $stored = UsageReceiptRecord::query()->whereKey($receiptId)->first();
 
-        $row = Usage::query()
-            ->forBrand($receipt->brandId)
-            ->where('subject_type', $receipt->holderType)
-            ->where('subject_id', $receipt->holderId)
-            ->where('limit_key', $receipt->key)
-            ->where('period_key', $receipt->periodKey)
-            ->first();
+        $refuse = function (string $why) use ($receiptId, $key): bool {
+            Log::warning('statamic-entitlements: a usage receipt was refused: '.$why, [
+                'receipt' => $receiptId,
+                'key' => $key,
+            ]);
 
-        if ($row === null) {
+            return false;
+        };
+
+        if ($stored === null) {
+            return $refuse('unknown in this brand');
+        }
+
+        if ($stored->limit_key !== $key) {
+            return $refuse('issued for another limit');
+        }
+
+        $holders = array_map(fn (SubjectReference $r) => $r->key(), $this->entitlements()->subjectsOf($subject));
+
+        if (! in_array($stored->holder()->key(), $holders, true)) {
+            return $refuse('held by a subject this one does not act for');
+        }
+
+        $left = $stored->amount - $stored->released;
+        $amount ??= $left;
+
+        if ($amount < 1 || $amount > $left) {
             return false;
         }
 
-        // The claim: one row per receipt, refused by the unique index the
-        // second time. insertOrIgnore, not a caught INSERT (see the class
-        // docblock on Postgres transactions).
-        $claimed = DB::table('entitlement_usage_releases')->insertOrIgnore([
-            'brand_id' => $receipt->brandId,
-            'receipt_id' => mb_substr($receipt->id, 0, 64),
-            'usage_id' => $row->getKey(),
-            'amount' => $amount,
-            'created_at' => CarbonImmutable::now('UTC')->format('Y-m-d H:i:s'),
-        ]) === 1;
+        return DB::transaction(function () use ($stored, $amount): bool {
+            // The claim. Conditional, so two retries of one cleanup cannot
+            // together give back more than was booked.
+            $claimed = UsageReceiptRecord::query()
+                ->whereKey($stored->getKey())
+                ->whereRaw('released + ? <= amount', [$amount])
+                ->update([
+                    'released' => DB::raw('released + '.$amount),
+                    'released_at' => CarbonImmutable::now('UTC')->format('Y-m-d H:i:s'),
+                ]) === 1;
 
-        if (! $claimed) {
-            return false;
-        }
+            if (! $claimed) {
+                return false;
+            }
 
-        // Never below zero: a counter reset by hand in between already gave
-        // everything back.
-        $lowered = Usage::query()->forBrand($receipt->brandId)->whereKey($row->getKey())
-            ->where('used', '>=', $amount)
-            ->update(['used' => DB::raw('used - '.$amount)]) === 1;
+            // One statement, never below zero: a counter reset by hand in
+            // between already gave everything back. CASE rather than
+            // GREATEST, which SQLite does not have.
+            Usage::query()->whereKey($stored->usage_id)->update([
+                'used' => DB::raw('CASE WHEN used >= '.$amount.' THEN used - '.$amount.' ELSE 0 END'),
+            ]);
 
-        if (! $lowered) {
-            Usage::query()->forBrand($receipt->brandId)->whereKey($row->getKey())->update(['used' => 0]);
-        }
+            Usage::query()
+                ->whereKey($stored->usage_id)
+                ->whereNotNull('reached_at')
+                ->where(fn ($q) => $q->whereNull('limit_value')->orWhereColumn('used', '<', 'limit_value'))
+                ->update(['reached_at' => null]);
 
-        $query = Usage::query()->forBrand($receipt->brandId)->whereKey($row->getKey())->whereNotNull('reached_at');
-
-        if ($row->limit_value !== null) {
-            $query->where('used', '<', $row->limit_value);
-        }
-
-        $query->update(['reached_at' => null]);
-
-        return true;
+            return true;
+        });
     }
 
     public function withinLimit(mixed $subject, string $key, int $current, int $adding = 1): bool

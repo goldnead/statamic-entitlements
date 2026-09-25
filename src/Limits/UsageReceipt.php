@@ -3,11 +3,12 @@
 namespace Goldnead\Entitlements\Limits;
 
 use Goldnead\Entitlements\Support\SubjectReference;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use JsonSerializable;
 
 /**
- * Proof of one booking: where it went, so it can be given back there.
+ * A handle on one booking, so it can be given back where it was booked.
  *
  * `consume()` returns it; `release(..., receipt: $receipt)` books the release
  * into exactly that counter. Without it, a release happens in whatever period
@@ -15,8 +16,10 @@ use JsonSerializable;
  * April's counter and leave March's full.
  *
  * Scalars only, so it survives a queue: store `toArray()` on the job or in a
- * column and hand the array back to `release()` (or `fromArray()` it).
- * `id` is the booking's own identity; a receipt releases once.
+ * column and hand the array back to `release()`. **Only the `id` is read back.**
+ * The server keeps its own copy of every receipt (`entitlement_usage_receipts`)
+ * and a release is checked against that copy: holder, key, period, amount and
+ * brand in the array are for the caller's information and are ignored.
  */
 final readonly class UsageReceipt implements JsonSerializable
 {
@@ -33,6 +36,24 @@ final readonly class UsageReceipt implements JsonSerializable
     public function holder(): SubjectReference
     {
         return new SubjectReference($this->holderType, $this->holderId);
+    }
+
+    /**
+     * The one thing a release takes from what the caller presents: the id.
+     * Everything else is read from the stored copy. An id that is not a UUID
+     * is refused, never shortened into one that might exist.
+     *
+     * @param  self|array<string, mixed>  $receipt
+     */
+    public static function idOf(self|array $receipt): string
+    {
+        $id = $receipt instanceof self ? $receipt->id : ($receipt['id'] ?? null);
+
+        if (! is_string($id) || ! Str::isUuid($id)) {
+            throw new InvalidArgumentException('A usage receipt needs the id consume() gave it.');
+        }
+
+        return strtolower($id);
     }
 
     /** @param  array<string, mixed>  $data */

@@ -6,6 +6,12 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Breaking
+
+- `consume()` returns `?UsageReceipt`, not `bool` (it has not been released as `bool`, but callers
+  written against the development branch are affected). Check with `! consume(...)` or
+  `=== null`; `=== false` and `=== true` no longer mean anything.
+
 ### Added
 
 - **Limits.** Products carry limits (`key => number|null`), set in the Control Panel
@@ -30,8 +36,12 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   New permission `manage entitlements limits`.
 - A Statamic user (file or Eloquent repository) is accepted as a subject.
 - `consume()` returns a `UsageReceipt` (null when refused); `release(..., receipt:)` gives a booking
-  back into its own period and holder, once (table `entitlement_usage_releases`). Without a receipt
-  a release stays in the current period and logs when it finds nothing.
+  back into its own period and holder, up to what was booked. The server keeps every receipt
+  (table `entitlement_usage_receipts`) and checks a release against that copy only: the id is the
+  one thing read from what the caller presents; the brand must be the current one, the key the one
+  asked about, the holder the subject or one it acts for. Claim and deduction in one transaction,
+  never below zero. Without a receipt a release stays in the current period and logs when it finds
+  nothing.
 - Fallback product per subject type (`limits.fallback_products`) and `Entitlements::fallbackUsing()`.
 - `-1` in `limits.products` reads as unlimited; stored limits refuse it.
 - Period anchor per key (`limits.keys.<key>.anchor`).

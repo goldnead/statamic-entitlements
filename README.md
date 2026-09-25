@@ -174,11 +174,19 @@ them, and among equally high teams the one with the smallest subject key wins (`
 person is working in right now" — only the caller knows that. `withinLimit()` records a stock count
 only when the subject passed *is* the holder; a member's own count never overwrites a team's.
 
-**Releasing.** `consume()` returns a `UsageReceipt` (holder, key, period, amount, brand; scalars,
-`toArray()`/`fromArray()` for a queue or a column). `release(..., receipt: $receipt)` gives the
-booking back into exactly that counter, once. Without a receipt a release only reaches the current
-period of the current holder; when that holds less than asked (a March booking released in April),
-nothing changes and a warning is logged.
+**Releasing.** `consume()` returns a `UsageReceipt`, or `null` when refused — check with
+`! consume(...)` or `=== null`, never `=== false`. The receipt is scalars (`toArray()` for a queue or
+a column). `release(..., receipt: $receipt)` gives the booking back into exactly that counter, up to
+what was booked (partial releases add up; `$amount` omitted means the rest).
+
+The server keeps its own copy of every receipt, and **only the `id` is read from what the caller
+presents**: holder, period, amount and brand come from the stored copy. A release is refused (false,
+logged) when the receipt is unknown in the current brand, was issued for another key, or is held by
+a subject that is neither the one passed nor one it acts for. The deduction is one UPDATE that
+cannot go below zero, in the same transaction as the claim.
+
+Without a receipt a release only reaches the current period of the current holder; when that holds
+less than asked (a March booking released in April), nothing changes and a warning is logged.
 
 **Without a grant.** `limits.fallback_products` per subject type (`['personal_team' => 'free']`),
 then `limits.fallback_product` for everybody, or decide in code with

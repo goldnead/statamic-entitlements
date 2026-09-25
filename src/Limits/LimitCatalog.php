@@ -28,7 +28,7 @@ class LimitCatalog
         // and a remembered no would outlast it.
         return $this->ready = $this->ready
             || (Schema::hasTable('entitlement_limits') && Schema::hasTable('entitlement_usages')
-                && Schema::hasTable('entitlement_usage_releases'));
+                && Schema::hasTable('entitlement_usage_receipts'));
     }
 
     private bool $ready = false;
