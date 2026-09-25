@@ -169,6 +169,7 @@ class QuotaManager
             periodStart: $quota->periodStart,
             periodEnd: $quota->periodEnd,
             occurredAt: $now,
+            brandId: (int) $row->brand_id,
         ));
 
         if ($quota->limit !== null && $used >= $quota->limit) {
@@ -303,6 +304,7 @@ class QuotaManager
             periodEnd: $quota->periodEnd,
             actor: $actor,
             occurredAt: CarbonImmutable::now('UTC'),
+            brandId: (int) $row->brand_id,
         ));
 
         return true;
@@ -578,6 +580,7 @@ class QuotaManager
             periodStart: $quota->periodStart,
             periodEnd: $quota->periodEnd,
             occurredAt: $now,
+            brandId: (int) $row->brand_id,
         ));
     }
 

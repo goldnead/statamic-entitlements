@@ -1,5 +1,6 @@
 <?php
 
+use Goldnead\Entitlements\Tests\SiblingTestCase;
 use Goldnead\Entitlements\Tests\TestCase;
 use Illuminate\Support\Str;
 use Statamic\Facades\Role;
@@ -14,6 +15,7 @@ use Statamic\Facades\User;
 require_once __DIR__.'/Fixtures/StandInActivityFacade.php';
 
 uses(TestCase::class)->in('Feature', 'Unit');
+uses(SiblingTestCase::class)->in('Integration');
 
 /**
  * A Control Panel user carrying exactly the given permissions.

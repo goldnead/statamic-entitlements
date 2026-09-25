@@ -11,10 +11,12 @@ use Goldnead\Entitlements\Events\EntitlementGranted;
 use Goldnead\Entitlements\Events\EntitlementPending;
 use Goldnead\Entitlements\Events\EntitlementRenewed;
 use Goldnead\Entitlements\Events\EntitlementRevoked;
+use Goldnead\Entitlements\Events\LimitReached;
 use Goldnead\Entitlements\Facades\Entitlements;
 use Goldnead\Entitlements\Limits\LimitCatalog;
 use Goldnead\Entitlements\Limits\Quota;
 use Goldnead\Entitlements\Limits\QuotaManager;
+use Goldnead\Entitlements\Mail\SendLimitReachedMail;
 use Goldnead\Entitlements\Models\Entitlement;
 use Goldnead\Entitlements\Support\AccessDecision;
 use Goldnead\Entitlements\Support\StateResolver;
@@ -612,6 +614,18 @@ class EntitlementManager
     public function setLimits(string $productSlug, array $limits): void
     {
         app(LimitCatalog::class)->store($productSlug, $limits);
+    }
+
+    /**
+     * Who gets the "limit reached" mail. Default: the person who reached it.
+     * Return addresses, or `['email' => …, 'name' => …]` pairs; null restores
+     * the default.
+     *
+     * @param  (callable(LimitReached): iterable<string|array{email: string, name?: string|null}>)|null  $resolver
+     */
+    public function mailRecipientsUsing(?callable $resolver): void
+    {
+        SendLimitReachedMail::recipientsUsing($resolver);
     }
 
     private function quotas(): QuotaManager

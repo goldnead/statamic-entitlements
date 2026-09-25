@@ -73,5 +73,25 @@ it('does not offer a key that is read while booting', function () {
         ->and($offered)->not->toContain('bridges.activity')
         // Abbildungen.
         ->and($offered)->not->toContain('sources')
-        ->and($offered)->not->toContain('manual.source');
+        ->and($offered)->not->toContain('manual.source')
+        // Die zwei neuen Bruecken haengen sich ebenfalls beim Booten ein.
+        ->and($offered)->not->toContain('bridges.webhook_manager')
+        ->and($offered)->not->toContain('bridges.automations')
+        // Abbildungen: die Grenzen je Produkt stehen am Produkt, nicht hier.
+        ->and($offered)->not->toContain('limits.products')
+        ->and($offered)->not->toContain('limits.keys');
+});
+
+it('offers how limits apply and the limit mail, and a saved switch reaches the listener', function () {
+    $offered = array_keys(app(SettingsRegistry::class)->fields('entitlements'));
+
+    expect($offered)->toContain('limits.fallback_product')
+        ->and($offered)->toContain('limits.period_anchor')
+        ->and($offered)->toContain('mail.limit_reached.enabled')
+        ->and($offered)->toContain('mail.limit_reached.template');
+
+    BrandSettings::for('entitlements')->save(['mail.limit_reached.enabled' => true, 'limits.fallback_product' => 'free']);
+
+    expect(config('entitlements.mail.limit_reached.enabled'))->toBeTrue()
+        ->and(config('entitlements.limits.fallback_product'))->toBe('free');
 });

@@ -6,12 +6,18 @@ use Goldnead\BrandContext\Settings\SettingsRegistry;
 use Goldnead\Entitlements\Bridges\ActivityBridge;
 use Goldnead\Entitlements\Contracts\PackageResolver;
 use Goldnead\Entitlements\Contracts\SubjectResolver;
+use Goldnead\Entitlements\Events\LimitReached;
+use Goldnead\Entitlements\Integrations\Automations\AutomationsBridge;
+use Goldnead\Entitlements\Integrations\EmailTemplates\MailTemplates;
+use Goldnead\Entitlements\Integrations\EmailTemplates\TemplateSource;
 use Goldnead\Entitlements\Integrations\Insights\Active;
 use Goldnead\Entitlements\Integrations\Insights\Expired;
 use Goldnead\Entitlements\Integrations\Insights\Granted;
 use Goldnead\Entitlements\Integrations\Insights\Revoked;
+use Goldnead\Entitlements\Integrations\WebhookManager\WebhookManagerBridge;
 use Goldnead\Entitlements\Limits\LimitCatalog;
 use Goldnead\Entitlements\Limits\QuotaManager;
+use Goldnead\Entitlements\Mail\SendLimitReachedMail;
 use Goldnead\Entitlements\Query\Scopes\Filters;
 use Goldnead\Entitlements\Support\MorphSubjectResolver;
 use Goldnead\Entitlements\Support\NullPackageResolver;
@@ -106,6 +112,53 @@ class ServiceProvider extends AddonServiceProvider
         parent::boot();
 
         $this->app->make(SettingsRegistry::class)->register(Settings::class);
+
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'entitlements');
+
+        // Explicit, and not in src/Listeners (which core wires by reflection in
+        // the booted phase): both at once would be two mails. The listener
+        // itself checks the setting, so a switch in the CP takes effect without
+        // a deploy.
+        $this->app->make('events')->listen(LimitReached::class, [SendLimitReachedMail::class, 'handle']);
+
+        $this->registerSiblingBridges();
+    }
+
+    /**
+     * Webhook Manager and automations, if they are there.
+     *
+     * From boot(), queued on `booted` and once more at the very end of the
+     * booted queue: sibling boot order is not guaranteed, and each bridge bails
+     * without marking itself done when the sibling has not bound its service
+     * yet. Both are idempotent and never throw.
+     */
+    protected function registerSiblingBridges(): void
+    {
+        $this->app->singleton(WebhookManagerBridge::class);
+        $this->app->singleton(AutomationsBridge::class);
+
+        // Tagged for `email-templates:import` only when the sibling's interface
+        // exists, asked by name: TemplateSource implements it.
+        if (interface_exists(MailTemplates::SOURCE_CONTRACT)) {
+            $this->app->tag([TemplateSource::class], 'email-templates.sources');
+        }
+
+        $boot = function (): void {
+            try {
+                $events = $this->app->make('events');
+                $this->app->make(WebhookManagerBridge::class)->boot($events);
+                $this->app->make(AutomationsBridge::class)->register($events);
+            } catch (Throwable $e) {
+                Log::warning('statamic-entitlements: a sibling bridge could not be registered.', [
+                    'exception' => $e->getMessage(),
+                ]);
+            }
+        };
+
+        $this->app->booted(function () use ($boot): void {
+            $boot();
+            $this->app->booted($boot);
+        });
     }
 
     public function bootAddon(): void

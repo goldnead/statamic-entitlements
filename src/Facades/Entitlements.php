@@ -33,6 +33,7 @@ use Illuminate\Support\Facades\Facade;
  * @method static bool resetUsage(mixed $subject, string $key, ?\Goldnead\IdentityContracts\Identity $actor = null)
  * @method static array<string, array{value: int|null, period: string|null}> limitsFor(string $productSlug)
  * @method static void setLimits(string $productSlug, array $limits)
+ * @method static void mailRecipientsUsing(?callable $resolver)
  *
  * @see EntitlementManager
  */

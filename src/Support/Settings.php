@@ -82,6 +82,24 @@ class Settings implements ProvidesSettings
                 ],
             ],
             [
+                // Alle vier werden bei jedem Zugriff gelesen, nie beim Booten,
+                // wirken also ab dem nächsten Aufruf. Die Grenzen selbst stehen
+                // nicht hier, sondern am Produkt (Entitlements > Grenzen).
+                'title' => __('entitlements::settings.groups.limits.title'),
+                'description' => __('entitlements::settings.groups.limits.description'),
+                'fields' => [
+                    static::field('limits.fallback_product', 'string', ['nullable' => true]),
+                    static::field('limits.period_anchor', 'select', [
+                        'options' => [
+                            'grant' => __('entitlements::settings.options.period_anchor.grant'),
+                            'calendar' => __('entitlements::settings.options.period_anchor.calendar'),
+                        ],
+                    ]),
+                    static::field('mail.limit_reached.enabled', 'boolean'),
+                    static::field('mail.limit_reached.template', 'string'),
+                ],
+            ],
+            [
                 'title' => __('entitlements::settings.groups.bridges.title'),
                 'description' => __('entitlements::settings.groups.bridges.description'),
                 'fields' => [

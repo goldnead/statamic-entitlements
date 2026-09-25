@@ -37,5 +37,6 @@ class LimitReached
         public readonly ?CarbonImmutable $periodStart = null,
         public readonly ?CarbonImmutable $periodEnd = null,
         public readonly ?CarbonImmutable $occurredAt = null,
+        public readonly ?int $brandId = null,
     ) {}
 }

@@ -193,6 +193,7 @@ class AnnounceStateTransitions extends Command
                 periodStart: $usage->period_start,
                 periodEnd: $usage->period_end,
                 occurredAt: $usage->period_end,
+                brandId: (int) $usage->brand_id,
             ));
 
             $count++;

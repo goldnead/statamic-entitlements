@@ -36,5 +36,6 @@ class UsageReset
         public readonly ?CarbonImmutable $periodEnd = null,
         public readonly ?Identity $actor = null,
         public readonly ?CarbonImmutable $occurredAt = null,
+        public readonly ?int $brandId = null,
     ) {}
 }

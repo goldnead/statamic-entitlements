@@ -29,6 +29,9 @@
         "statamic/cms": "^6.0"
     },
     "require-dev": {
+        "goldnead/statamic-automations": "^2.16",
+        "goldnead/statamic-email-templates": "^2.7",
+        "goldnead/statamic-webhook-manager": "^2.9",
         "larastan/larastan": "^3.0",
         "laravel/pint": "^1.18",
         "orchestra/testbench": "^10.0|^11.0",
@@ -39,7 +42,9 @@
         "goldnead/statamic-activity": "Records grants, revocations and expiries into the activity ledger.",
         "goldnead/statamic-insights": "Shows grants begun, withdrawn and expired, and the live holding, on the Insights dashboard.",
         "goldnead/statamic-leadhub": "Lets a CRM contact be the subject of a grant, not just a user.",
-        "goldnead/statamic-automations": "Lets automations trigger on the four domain events this addon emits (planned)."
+        "goldnead/statamic-automations": "Starts automations when a limit is reached, usage is booked or a counter resets (the grant triggers ship with automations itself).",
+        "goldnead/statamic-webhook-manager": "Offers all eight events (grants and limits) as triggers for outbound webhooks; picked up automatically where it is installed.",
+        "goldnead/statamic-email-templates": "Makes the \"limit reached\" mail an editable template; without it the bundled text is sent."
     },
     "autoload": {
         "psr-4": {
