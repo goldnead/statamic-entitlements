@@ -18,7 +18,7 @@ const answer = (overrides = {}) => ({
             grants_access: true,
             source: 'Manual grant',
             starts_at: null,
-            expires_at: '2027-01-01 00:00 UTC',
+            expires_at: '2027-01-01T00:00:00Z',
             show_url: '/cp/entitlements/7',
             revoke_url: '/cp/entitlements/7/revoke',
             can_revoke: true,
@@ -27,8 +27,8 @@ const answer = (overrides = {}) => ({
     canGrant: true,
     canRevoke: true,
     products: [
-        { value: 'kurs', label: 'Der Kurs', unknown: false },
-        { value: 'alt', label: 'alt (not in the catalogue)', unknown: true },
+        { value: 'kurs', label: 'Der Kurs' },
+        { value: 'masterclass', label: 'Masterclass' },
     ],
     indexUrl: '/cp/entitlements',
     ...overrides,
@@ -70,7 +70,8 @@ describe('the Zugänge section on a user page', () => {
         expect(row.text()).toContain('kurs');
         expect(row.text()).toContain('Active');
         expect(row.text()).toContain('Manual grant');
-        expect(row.text()).toContain('2027-01-01 00:00 UTC');
+        // Formatted like core, in the viewer's locale, not a monospaced UTC stamp.
+        expect(row.text()).toContain('formatted(2027-01-01T00:00:00Z,datetime)');
         expect(row.find('a').attributes('href')).toBe('/cp/entitlements/7');
     });
 
@@ -96,7 +97,9 @@ describe('the Zugänge section on a user page', () => {
         await button.trigger('click');
 
         const picker = wrapper.find('[data-stub="Combobox"]');
-        expect(JSON.parse(picker.attributes('data-options')).map((o) => o.value)).toEqual(['kurs', 'alt']);
+        expect(JSON.parse(picker.attributes('data-options')).map((o) => o.value)).toEqual(['kurs', 'masterclass']);
+        // Picking only: with a catalogue nothing can be typed in.
+        expect(wrapper.findComponent({ name: 'Combobox' }).props('taggable')).toBeFalsy();
         await picker.setValue('kurs');
 
         const submit = wrapper.findAll('[data-stub="Button"]').find((b) => b.text() === 'entitlements::cp.user_grant_submit');

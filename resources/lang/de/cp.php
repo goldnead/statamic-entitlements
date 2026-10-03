@@ -2,12 +2,15 @@
 
 return [
 
-    'nav' => 'Berechtigungen',
-    'title' => 'Berechtigungen',
+    // Nicht „Berechtigungen": so heißt unter Benutzer:innen schon core's
+    // Rollen-Bildschirm, und zwei gleich benannte Einträge untereinander
+    // führten in die Irre (Design-Kritik, 03.10.2026).
+    'nav' => 'Vergaben',
+    'title' => 'Vergaben',
 
-    'permission_view' => 'Berechtigungen ansehen',
-    'permission_grant' => 'Berechtigungen vergeben',
-    'permission_revoke' => 'Berechtigungen widerrufen',
+    'permission_view' => 'Vergaben ansehen',
+    'permission_grant' => 'Zugänge vergeben',
+    'permission_revoke' => 'Zugänge entziehen',
 
     'states' => 'Zustände',
     'state_pending' => 'Ausstehend',
@@ -31,7 +34,7 @@ return [
 
     'create_grant' => 'Zugriff vergeben',
     'view' => 'Ansehen',
-    'back_to_entitlements' => 'Alle Berechtigungen',
+    'back_to_entitlements' => 'Alle Vergaben',
 
     'empty_heading' => 'Es wurde noch nichts vergeben. Eine Berechtigung hält fest, dass ein Subjekt ein Produkt nutzen darf, woher diese Erlaubnis kommt und wie lange sie gilt.',
     'empty_create_description' => 'Zugriff von Hand vergeben, mit Quelle und nachvollziehbarer Spur.',
@@ -46,13 +49,13 @@ return [
     'tab_revoke' => 'Widerruf',
 
     'section_subject' => 'Subjekt',
-    'section_subject_instructions' => 'Wem diese Berechtigung gehört. Meist eine Person, per Suche gewählt. Für alles andere Typ und ID: der Typ ist ein Morph-Alias wie `team` oder `contact`, die ID der Schlüssel des Datensatzes.',
+    'section_subject_instructions' => 'Wem dieser Zugang gehört.',
     'section_grant' => 'Was vergeben wird',
     'section_window_instructions' => 'Beide Felder leer lassen für Zugriff, der sofort beginnt und nicht endet.',
     'section_revoke_instructions' => 'Ein Widerruf entzieht den Zugriff sofort und hält fest, wer ihn wann und warum ausgesprochen hat. Er lässt sich zurücknehmen, der Eintrag bleibt.',
 
     'field_subject_type' => 'Subjekt-Typ',
-    'field_subject_type_instructions' => 'Ein Morph-Alias, z. B. `user`.',
+    'field_subject_type_instructions' => 'Für alles, was keine Person ist: ein Morph-Alias wie `team` oder `contact`. Die ID daneben ist der Schlüssel des Datensatzes.',
     'field_subject_id' => 'Subjekt-ID',
     'field_subject_id_instructions' => 'Der Primärschlüssel des Datensatzes.',
     'field_product_slug' => 'Produkt-Slug',
@@ -66,7 +69,7 @@ return [
     'field_reason' => 'Grund',
     'field_reason_instructions' => 'Pflichtfeld. In sechs Monaten ist das das Einzige, was den Widerruf noch erklärt.',
 
-    'revoke_title' => 'Zugriff auf :product widerrufen',
+    'revoke_title' => 'Zugriff auf :product für :subject widerrufen',
     'revoke' => 'Zugriff widerrufen',
     'restore' => 'Zugriff wiederherstellen',
     'restore_confirm_title' => 'Zugriff wiederherstellen?',
@@ -93,7 +96,7 @@ return [
 
     // Kontingente
     'permission_limits' => 'Grenzen pflegen und Verbrauch zurücksetzen',
-    'nav_grants' => 'Freigaben',
+    'nav_grants' => 'Alle Vergaben',
     'limits_title' => 'Grenzen',
     'limits_intro' => 'Wie viel ein Produkt erlaubt. Hat jemand mehrere Zugänge, gilt der höchste Wert; Zugänge eines Teams zählen für seine Mitglieder mit, verbraucht wird dann beim Team.',
     'limits_create' => 'Grenzen für ein Produkt anlegen',
@@ -171,7 +174,6 @@ return [
     'wiring_no_mail' => 'keine',
 
     // Auswählen statt Tippen (1.6.0)
-    'catalog_unknown_option' => ':slug (nicht im Katalog)',
     'field_subject_kind' => 'Vergeben an',
     'subject_kind_user' => 'Eine Person',
     'subject_kind_other' => 'Ein anderes Subjekt (Typ und ID)',
@@ -179,7 +181,7 @@ return [
     'field_subject_user_instructions' => 'Nach Name oder E-Mail suchen.',
     'subject_user_missing' => 'Wähle die Person, für die der Zugang gilt.',
     'field_product' => 'Zugang',
-    'field_product_instructions' => 'Nach Namen auswählen. Ein Slug, der nicht in der Liste steht, lässt sich trotzdem eintippen; er wird dann als nicht im Katalog markiert.',
+    'field_product_instructions' => 'Nach Namen auswählen.',
     'field_product_placeholder' => 'Zugang wählen',
     'product_unknown' => 'nicht im Katalog',
     'product_unknown_hint' => 'Kein installiertes Addon kennt diesen Slug mehr. Die Vergabe gilt trotzdem.',
@@ -197,7 +199,7 @@ return [
     'user_col_until' => 'Bis',
     'user_grant_action' => 'Zugang freischalten',
     'user_grant_title' => 'Zugang freischalten',
-    'user_grant_intro' => 'Wird geschrieben wie eine manuelle Vergabe unter Benutzer > Berechtigungen: Quelle manuell, mit deinem Namen.',
+    'user_grant_intro' => 'Wird geschrieben wie eine manuelle Vergabe unter Benutzer:innen > Vergaben: Quelle manuell, mit deinem Namen.',
     'user_grant_submit' => 'Freischalten',
     'user_grant_done' => 'Zugang freigeschaltet.',
     'user_product_text_instructions' => 'Kein Addon meldet hier seine Zugänge an, also den Slug eintragen.',
@@ -209,5 +211,7 @@ return [
     'user_revoke_done' => 'Zugang entzogen.',
     'user_open_grant' => 'Vergabe öffnen',
     'cancel' => 'Abbrechen',
+    'grants_of' => 'Vergaben von :subject',
+    'clear_subject_filter' => 'Alle anzeigen',
 
 ];

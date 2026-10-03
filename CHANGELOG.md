@@ -19,10 +19,16 @@ Picking instead of typing. Granting no longer asks for slugs and IDs from memory
 - **Grant form picks the person.** "Granted to" is a person by default, chosen through core's
   `users` search by name or email; the reference is derived by the bound `SubjectResolver`, as
   `Entitlements::grant($user, …)` does. Type and ID stay available for every other subject.
-- **Product pickers.** With a catalogue, the product in the grant form and in "new limits" is a
-  searchable select with names. Slugs not in the list can still be entered (`taggable`); slugs
-  already granted that no source knows are offered, marked "not in the catalogue". Without any
-  catalogue both stay free text.
+- **Product pickers.** With a catalogue, the product in the grant form, in "new limits" and in
+  the user section is a searchable select offering catalogue entries only, by name. Slugs already
+  granted that no source knows are not offered; they stay visible, flagged, on the grant and in the
+  user section. The server still accepts any slug, so integrations posting one keep working.
+  Without any catalogue every product field stays free text.
+- **People by name.** Where the subject is a Statamic user, the listing, the grant and the
+  revocation form show her name (with email, linked to her user page); the key stays as a side
+  note. Other subject types keep the `SubjectResolver` label. The listing search also matches a
+  person's name and email and a product's catalogue name. `?subject=type:id` filters the listing to
+  one subject; the user section's "all grants" link uses it.
 - **"Zugänge" section for user pages.** The fieldtype `user_entitlements` lists a user's grants
   (name, state, source, from, until, link to the grant), grants an access from a stack (picker,
   optional start and end) and revokes with a mandatory reason. It posts to the manual grant and
@@ -34,6 +40,10 @@ Picking instead of typing. Granting no longer asks for slugs and IDs from memory
 
 ### Changed
 
+- German Control Panel: the screens are called "Vergaben" (were "Berechtigungen", which clashed with
+  core's roles screen under the same section); permission labels follow. English is unchanged.
+- The grant detail page and the user section show dates in the viewer's locale and timezone, as
+  core does; the UTC stamp is the tooltip on the detail page.
 - The manual grant accepts `subject_kind` (`user`, `other`) and `subject_user`. A request without
   `subject_kind` that sends `subject_type` is treated as `other`, so existing integrations keep
   working unchanged.

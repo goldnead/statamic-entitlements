@@ -31,7 +31,8 @@ use Throwable;
  * A slug nobody registered still writes, resolves and grants access, exactly as
  * an unregistered source does ({@see SourceRegistry}). The catalogue only adds
  * names. A grant the source system wrote years ago under a slug that no longer
- * exists stays valid; the screens flag it rather than refuse it.
+ * exists stays valid; the screens flag it rather than refuse it. The pickers
+ * offer only what the catalogue knows, so new grants are made by name.
  *
  * ## No catalogue, no picker
  *
@@ -141,39 +142,27 @@ final class ProductCatalog
     }
 
     /**
-     * Select options: every registered product by name, then each slug already
-     * in use that no source knows, flagged as such.
+     * Select options: every registered product by name, and nothing else.
      *
-     * The flagged ones are offered rather than hidden, because they are real
-     * grants: somebody may need to hand out the same old slug once more.
+     * Slugs already granted that no source knows are not offered (design
+     * review, 03.10.2026): a picker entry reading "altes-paket (not in the
+     * catalogue)" invites handing out something nobody can name any more. Such
+     * grants stay valid and visible, flagged, in the listing and on the grant.
      *
-     * @param  iterable<int, string>  $inUse
+     * @param  array<string, array{slug: string, label: string, group: string|null}>|null  $products  pass {@see all()} when already read
      * @return array<string, string> slug => label
      */
-    public function options(iterable $inUse = []): array
+    public function options(?array $products = null): array
     {
-        $products = $this->all();
         $options = [];
 
-        foreach ($products as $slug => $product) {
+        foreach ($products ?? $this->all() as $slug => $product) {
             $options[$slug] = $product['group'] !== null && $product['group'] !== ''
                 ? $product['label'].' · '.$product['group']
                 : $product['label'];
         }
 
-        $unknown = [];
-
-        foreach ($inUse as $slug) {
-            $slug = (string) $slug;
-
-            if ($slug !== '' && ! array_key_exists($slug, $options)) {
-                $unknown[$slug] = (string) __('entitlements::cp.catalog_unknown_option', ['slug' => $slug]);
-            }
-        }
-
-        ksort($unknown);
-
-        return $options + $unknown;
+        return $options;
     }
 
     /**

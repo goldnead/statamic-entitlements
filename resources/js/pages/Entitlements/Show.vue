@@ -1,6 +1,12 @@
 <script setup>
 import { ref } from 'vue';
-import { Head, router } from '@statamic/cms/inertia';
+import { DateFormatter } from '@statamic/cms';
+import { Head, Link, router } from '@statamic/cms/inertia';
+
+/** An ISO instant in the viewer's locale; the stored UTC text as a fallback. */
+function formatDate(row) {
+    return row.iso ? DateFormatter.format(row.iso, 'datetime') : row.value;
+}
 import {
     Badge,
     Button,
@@ -158,7 +164,14 @@ const badgeColour = {
                     <dl class="divide-y divide-content-border">
                         <div class="py-3 flex flex-wrap gap-2 justify-between">
                             <dt class="text-gray-500">{{ __('entitlements::cp.subject') }}</dt>
-                            <dd class="font-mono text-sm">{{ entitlement.subject_label }}</dd>
+                            <!-- A person by name, linked to her user page; the key
+                                 stays as a side note, since it is the identity. -->
+                            <dd v-if="entitlement.subject_url" class="text-sm text-end">
+                                <Link :href="entitlement.subject_url">{{ entitlement.subject_label }}</Link>
+                                <div v-if="entitlement.subject_email && entitlement.subject_email !== entitlement.subject_label" class="text-xs text-gray-600 dark:text-gray-400">{{ entitlement.subject_email }}</div>
+                                <code class="text-2xs">{{ entitlement.subject_key }}</code>
+                            </dd>
+                            <dd v-else class="font-mono text-sm">{{ entitlement.subject_label }}</dd>
                         </div>
                         <div class="py-3 flex flex-wrap gap-2 justify-between">
                             <dt class="text-gray-500">{{ __('entitlements::cp.product') }}</dt>
@@ -213,10 +226,10 @@ const badgeColour = {
                     <ul v-else class="divide-y divide-content-border">
                         <li v-for="row in timeline" :key="row.label" class="py-3">
                             <div class="text-gray-500 text-xs uppercase tracking-wide">{{ row.label }}</div>
-                            <!-- Always UTC and always labelled. Every date on this row
-                                 decides access; a viewer-local rendering of one is a
-                                 support conversation nobody can win. -->
-                            <div class="font-mono text-sm whitespace-nowrap">{{ row.value }}</div>
+                            <!-- In the viewer's locale and timezone, as core renders
+                                 dates (design review, 03.10.2026). The UTC instant
+                                 is one hover away, for the support conversation. -->
+                            <div class="text-sm" :title="row.value">{{ formatDate(row) }}</div>
                         </li>
                     </ul>
                 </Card>

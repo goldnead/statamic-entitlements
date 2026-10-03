@@ -23,6 +23,16 @@ const props = {
 beforeEach(() => router.reset());
 
 describe('the entitlements index', () => {
+    it('opened from a user page, lists her grants only and says whose they are', () => {
+        const wrapper = mount(Index, {
+            props: { ...props, subject: { key: 'user:abc', label: 'Clara Voss', clearUrl: '/cp/entitlements' } },
+        });
+
+        expect(wrapper.findComponent({ name: 'Listing' }).props('additionalParameters')).toEqual({ subject: 'user:abc' });
+        expect(wrapper.find('[data-stub="Header"]').attributes('title')).toBe('entitlements::cp.grants_of');
+        expect(wrapper.find('a[href="/cp/entitlements"]').exists()).toBe(true);
+    });
+
     it('feeds the listing the props that decide whether it is a real listing', () => {
         const listing = mount(Index, { props }).findComponent({ name: 'Listing' });
 

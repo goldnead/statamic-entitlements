@@ -13,9 +13,11 @@ use Goldnead\Entitlements\Support\ProductCatalog;
 use Goldnead\Entitlements\Support\Setup;
 use Goldnead\Entitlements\Support\SourceRegistry;
 use Goldnead\Entitlements\Support\SubjectReference;
+use Goldnead\Entitlements\Support\UserSubjects;
 use Goldnead\IdentityContracts\Identity;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
@@ -80,7 +82,17 @@ class EntitlementController extends Controller
             return $this->listing($request);
         }
 
+        $subject = $this->subjectFilter($request);
+
         return Inertia::render('entitlements::Entitlements/Index', [
+            // Set when the page was opened from a user page ("all grants"):
+            // the listing shows that person's grants only, and says whose.
+            'subject' => $subject ? [
+                'key' => $subject->key(),
+                'label' => app(UserSubjects::class)->describeOne($subject)['name']
+                    ?? $this->entitlements->subjectLabel($subject),
+                'clearUrl' => cp_route('entitlements.index'),
+            ] : null,
             'initialColumns' => collect($this->columns())->map->toArray()->all(),
             'filters' => Scope::filters(EntitlementFilter::LISTING_KEY),
             'hasAny' => Entitlement::query()->exists(),
@@ -109,7 +121,11 @@ class EntitlementController extends Controller
 
         // A request without the switch is one written before it existed (an
         // integration, a test, a bookmarked script): it sent type and ID, so it
-        // means "other". The form itself always sends the switch.
+        // means "other". The form itself always sends the switch. The order of
+        // the three cases matters: a picked user wins over a stray type; type
+        // without a user means the old shape; neither means the form's default
+        // (`user`), so an empty post fails on the person, not on a type nobody
+        // was asked for. An explicit `subject_kind` is never overridden.
         $input['subject_kind'] ??= filled($input['subject_user'] ?? null) || blank($input['subject_type'] ?? null)
             ? 'user'
             : 'other';
@@ -149,15 +165,18 @@ class EntitlementController extends Controller
         $state = $model->state();
         $catalog = app(ProductCatalog::class);
         $products = $catalog->all();
+        $subject = new SubjectReference($model->subject_type, $model->subject_id);
+        $person = app(UserSubjects::class)->describeOne($subject);
 
         return Inertia::render('entitlements::Entitlements/Show', [
             'entitlement' => [
                 'id' => $model->getKey(),
                 'subject_type' => $model->subject_type,
                 'subject_id' => $model->subject_id,
-                'subject_label' => $this->entitlements->subjectLabel(
-                    new SubjectReference($model->subject_type, $model->subject_id)
-                ),
+                'subject_label' => $person['name'] ?? $this->entitlements->subjectLabel($subject),
+                'subject_email' => $person['email'] ?? null,
+                'subject_url' => $person['url'] ?? null,
+                'subject_key' => $subject->key(),
                 'product_slug' => $model->product_slug,
                 'product_label' => $catalog->label($model->product_slug, $products),
                 // Unknown to a catalogue that exists: still a valid grant, but
@@ -241,8 +260,15 @@ class EntitlementController extends Controller
 
         $model = Entitlement::query()->findOrFail($entitlement);
 
+        // Says whose access goes: the person's name, or the resolver's label.
+        $subject = new SubjectReference($model->subject_type, $model->subject_id);
+        $who = app(UserSubjects::class)->describeOne($subject)['name'] ?? $this->entitlements->subjectLabel($subject);
+
         return PublishForm::make(Blueprints::revocation())
-            ->title(__('entitlements::cp.revoke_title', ['product' => app(ProductCatalog::class)->label($model->product_slug)]))
+            ->title(__('entitlements::cp.revoke_title', [
+                'product' => app(ProductCatalog::class)->label($model->product_slug),
+                'subject' => $who,
+            ]))
             ->icon('key')
             ->submittingTo(cp_route('entitlements.revoke', ['entitlement' => $model->getKey()]), 'POST');
     }
@@ -341,14 +367,21 @@ class EntitlementController extends Controller
      */
     private function timeline(Entitlement $model): array
     {
-        $format = fn ($date) => $this->stamp($date);
+        // `value` is the UTC stamp (kept for anything that reads it), `iso` the
+        // instant the page formats in the viewer's locale and timezone, as
+        // core renders dates.
+        $row = fn (string $label, $date) => [
+            'label' => $label,
+            'value' => $this->stamp($date),
+            'iso' => $date ? $date->toIso8601ZuluString() : null,
+        ];
 
         return array_values(array_filter([
-            ['label' => __('entitlements::cp.timeline_created'), 'value' => $format($model->getAttribute('created_at'))],
-            ['label' => __('entitlements::cp.timeline_starts'), 'value' => $format($model->starts_at)],
-            ['label' => __('entitlements::cp.timeline_expires'), 'value' => $format($model->expires_at)],
-            ['label' => __('entitlements::cp.timeline_grace'), 'value' => $format($model->grace_until)],
-            ['label' => __('entitlements::cp.timeline_revoked'), 'value' => $format($model->revoked_at)],
+            $row(__('entitlements::cp.timeline_created'), $model->getAttribute('created_at')),
+            $row(__('entitlements::cp.timeline_starts'), $model->starts_at),
+            $row(__('entitlements::cp.timeline_expires'), $model->expires_at),
+            $row(__('entitlements::cp.timeline_grace'), $model->grace_until),
+            $row(__('entitlements::cp.timeline_revoked'), $model->revoked_at),
         ], fn (array $row): bool => $row['value'] !== null));
     }
 
@@ -362,6 +395,10 @@ class EntitlementController extends Controller
             $request->filters ?? [],
             ['handle' => EntitlementFilter::LISTING_KEY],
         );
+
+        if ($subject = $this->subjectFilter($request)) {
+            $query->where('subject_type', $subject->type)->where('subject_id', $subject->id);
+        }
 
         $this->applySearch($query, (string) $request->input('search', ''));
 
@@ -380,9 +417,15 @@ class EntitlementController extends Controller
 
         $products = app(ProductCatalog::class)->all();
 
+        // The people on this page in one user query, not one per row.
+        $people = app(UserSubjects::class)->describe(array_map(
+            fn (Entitlement $e) => new SubjectReference($e->subject_type, $e->subject_id),
+            $paginator->items(),
+        ));
+
         return [
             // The catalogue once per page, not once per row: a source may query.
-            'data' => array_map(fn (Entitlement $e) => $this->row($e, $products), $paginator->items()),
+            'data' => array_map(fn (Entitlement $e) => $this->row($e, $products, $people), $paginator->items()),
             'meta' => [
                 'columns' => collect($this->columns())->map->toArray()->all(),
                 'activeFilterBadges' => $badges,
@@ -409,11 +452,48 @@ class EntitlementController extends Controller
         // typed by a user is a percent sign rather than a full table scan.
         $term = str_replace(['%', '_'], ['\%', '\_'], $search).'%';
 
-        $query->where(function ($query) use ($term): void {
+        // People by name or email, and products by their catalogue name. Both
+        // resolved to keys first, so the grants query stays on its indexes.
+        // Searching "Clara" used to match whoever's UUID started that way.
+        $users = app(UserSubjects::class);
+        $userIds = $users->idsMatching($search);
+        $userTypes = $users->types();
+
+        $needle = mb_strtolower($search);
+        $slugs = collect(app(ProductCatalog::class)->all())
+            ->filter(fn (array $product) => str_contains(mb_strtolower($product['label']), $needle))
+            ->keys()
+            ->all();
+
+        $query->where(function ($query) use ($term, $userIds, $userTypes, $slugs): void {
             $query->where('product_slug', 'like', $term)
                 ->orWhere('subject_id', 'like', $term)
                 ->orWhere('source_ref', 'like', $term);
+
+            if ($userIds !== []) {
+                $query->orWhere(fn ($query) => $query
+                    ->whereIn('subject_type', $userTypes)
+                    ->whereIn('subject_id', $userIds));
+            }
+
+            if ($slugs !== []) {
+                $query->orWhereIn('product_slug', $slugs);
+            }
         });
+    }
+
+    /** `?subject=type:id`, as the user page's "all grants" link sends it. */
+    private function subjectFilter(Request $request): ?SubjectReference
+    {
+        $value = $request->input('subject');
+
+        if (! is_string($value) || ! str_contains($value, ':')) {
+            return null;
+        }
+
+        [$type, $id] = explode(':', $value, 2);
+
+        return $type !== '' && $id !== '' ? new SubjectReference($type, $id) : null;
     }
 
     private function perPage(mixed $requested): int
@@ -440,12 +520,17 @@ class EntitlementController extends Controller
      * @param  array<string, array{slug: string, label: string, group: string|null}>  $products
      * @return array<string, mixed>
      */
-    private function row(Entitlement $entitlement, array $products = []): array
+    private function row(Entitlement $entitlement, array $products = [], array $people = []): array
     {
         $state = $entitlement->state();
         $catalog = app(ProductCatalog::class);
+        $person = $people[$entitlement->subjectKey()] ?? null;
 
         return [
+            // A user subject reads as her name, with her email and a link to
+            // her user page; the key stays as `subject_key`.
+            'subject_email' => $person['email'] ?? null,
+            'subject_url' => $person['url'] ?? null,
             'id' => $entitlement->getKey(),
             'product_slug' => $entitlement->product_slug,
             'product_label' => $catalog->label($entitlement->product_slug, $products),
@@ -455,7 +540,7 @@ class EntitlementController extends Controller
             // not, so a host that had gone to the trouble of binding a
             // SubjectResolver still read `App\Models\User:4` on the one screen
             // people actually scan. Found by looking at it.
-            'subject' => $this->entitlements->subjectLabel(
+            'subject' => $person['name'] ?? $this->entitlements->subjectLabel(
                 new SubjectReference($entitlement->subject_type, $entitlement->subject_id)
             ),
             // Kept alongside, because the label is a display name and the key

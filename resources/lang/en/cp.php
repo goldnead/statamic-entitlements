@@ -46,13 +46,13 @@ return [
     'tab_revoke' => 'Revocation',
 
     'section_subject' => 'Subject',
-    'section_subject_instructions' => 'Who this grant belongs to. Usually a person, picked by search. For anything else, type and ID: the type is a morph alias such as `team` or `contact`; the id is that record’s key.',
+    'section_subject_instructions' => 'Who this access belongs to.',
     'section_grant' => 'What is being granted',
     'section_window_instructions' => 'Leave both empty for access that starts now and never ends.',
     'section_revoke_instructions' => 'Revoking takes access away immediately and records who did it and why. It can be undone, but the record stays.',
 
     'field_subject_type' => 'Subject type',
-    'field_subject_type_instructions' => 'A morph alias, e.g. `user`.',
+    'field_subject_type_instructions' => 'For anything that is not a person: a morph alias such as `team` or `contact`. The ID next to it is the record’s key.',
     'field_subject_id' => 'Subject id',
     'field_subject_id_instructions' => 'The record’s primary key.',
     'field_product_slug' => 'Product slug',
@@ -66,7 +66,7 @@ return [
     'field_reason' => 'Reason',
     'field_reason_instructions' => 'Required. Six months from now this is the only thing that explains the revocation.',
 
-    'revoke_title' => 'Revoke access to :product',
+    'revoke_title' => 'Revoke access to :product for :subject',
     'revoke' => 'Revoke access',
     'restore' => 'Restore access',
     'restore_confirm_title' => 'Restore access?',
@@ -171,7 +171,6 @@ return [
     'wiring_no_mail' => 'none',
 
     // Picking instead of typing (1.6.0)
-    'catalog_unknown_option' => ':slug (not in the catalogue)',
     'field_subject_kind' => 'Granted to',
     'subject_kind_user' => 'A person',
     'subject_kind_other' => 'Another subject (type and ID)',
@@ -179,7 +178,7 @@ return [
     'field_subject_user_instructions' => 'Search by name or email.',
     'subject_user_missing' => 'Pick the person this access is for.',
     'field_product' => 'Access',
-    'field_product_instructions' => 'Pick by name. A slug that is not in the list can still be typed in; it is then marked as not in the catalogue.',
+    'field_product_instructions' => 'Pick by name.',
     'field_product_placeholder' => 'Choose an access',
     'product_unknown' => 'not in the catalogue',
     'product_unknown_hint' => 'No installed addon knows this slug any more. The grant still applies.',
@@ -209,5 +208,7 @@ return [
     'user_revoke_done' => 'Access revoked.',
     'user_open_grant' => 'Open grant',
     'cancel' => 'Cancel',
+    'grants_of' => 'Grants of :subject',
+    'clear_subject_filter' => 'Show all',
 
 ];

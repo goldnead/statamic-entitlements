@@ -3,10 +3,8 @@
 namespace Goldnead\Entitlements\Support;
 
 use Goldnead\Entitlements\Limits\LimitCatalog;
-use Goldnead\Entitlements\Models\Entitlement;
 use Statamic\Facades\Blueprint;
 use Statamic\Fields\Blueprint as BlueprintInstance;
-use Throwable;
 
 /**
  * The blueprints behind the two Control Panel forms.
@@ -96,7 +94,6 @@ class Blueprints
                                     'handle' => 'product_slug',
                                     'field' => self::productField(
                                         __('entitlements::cp.field_product_slug_instructions'),
-                                        self::slugsInUse(),
                                     ),
                                 ],
                                 [
@@ -201,7 +198,6 @@ class Blueprints
                 'handle' => 'product_slug',
                 'field' => self::productField(
                     __('entitlements::cp.limits_product_instructions'),
-                    self::slugsInUse(),
                 ),
             ];
         }
@@ -314,21 +310,23 @@ class Blueprints
      * A picker with names when some addon has registered its products, free
      * text when none has.
      *
-     * `taggable`, because the catalogue names products and never decides which
-     * may be granted: a slug from the old system, or one a site handles in its
-     * own code, must still be enterable. Such slugs already in use are offered
-     * too, flagged in their label ({@see ProductCatalog::options()}).
+     * With a catalogue the picker offers its entries and nothing else, not
+     * even slugs already granted (design review, 03.10.2026): new grants are
+     * made by name. The server still accepts any slug, because the catalogue
+     * names products and never decides which may be granted; an integration
+     * posting an old slug keeps working, and the grant is flagged on its page.
      *
-     * @param  list<string>  $inUse
+     * The catalogue is read once: a source may query.
+     *
      * @return array<string, mixed>
      */
-    public static function productField(string $instructions, array $inUse = []): array
+    public static function productField(string $instructions): array
     {
         $base = ['validate' => ['required', 'max:191']];
 
-        $catalog = app(ProductCatalog::class);
+        $products = app(ProductCatalog::class)->all();
 
-        if (! $catalog->available()) {
+        if ($products === []) {
             return $base + [
                 'type' => 'text',
                 'display' => __('entitlements::cp.field_product_slug'),
@@ -340,28 +338,10 @@ class Blueprints
             'type' => 'select',
             'display' => __('entitlements::cp.field_product'),
             'instructions' => __('entitlements::cp.field_product_instructions'),
-            'options' => $catalog->options($inUse),
-            'taggable' => true,
+            'options' => app(ProductCatalog::class)->options($products),
             'searchable' => true,
             'clearable' => false,
             'placeholder' => __('entitlements::cp.field_product_placeholder'),
         ];
-    }
-
-    /**
-     * Every product slug somebody holds a grant for, for flagging the ones no
-     * catalogue source knows. One grouped query; empty before `migrate`.
-     *
-     * @return list<string>
-     */
-    public static function slugsInUse(): array
-    {
-        try {
-            return Entitlement::query()->distinct()->orderBy('product_slug')->pluck('product_slug')
-                ->map(fn ($slug) => (string) $slug)
-                ->all();
-        } catch (Throwable) {
-            return [];
-        }
     }
 }

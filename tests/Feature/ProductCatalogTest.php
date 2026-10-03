@@ -49,25 +49,25 @@ it('offers a picker with names once a source registers products', function () {
         $field = productField($blueprint->contents());
 
         expect($field['type'])->toBe('select')
-            // Unknown slugs stay possible: the catalogue names, it does not decide.
-            ->and($field['taggable'])->toBeTrue()
-            ->and($field['options'])->toMatchArray([
+            // With a catalogue, picking is the only way: no typing.
+            ->and($field['taggable'] ?? false)->toBeFalse()
+            ->and($field['options'])->toBe([
                 'choiraccelerator' => 'Choir Accelerator',
                 'masterclass' => 'Masterclass · Adrian Goldner',
             ]);
     }
 });
 
-it('offers a slug already in use that no source knows, flagged', function () {
+it('offers only catalogue entries, never a raw slug already in use', function () {
+    // Design review, 03.10.2026: "(nicht im Katalog)" entries in the picker
+    // invite handing out a slug nobody can name any more. Old grants on such
+    // slugs stay visible in the listing and on the grant, flagged there.
     Entitlements::registerProducts(['kurs-neu' => 'Neuer Kurs']);
     Entitlement::factory()->create(['product_slug' => 'legacy-slug']);
 
     $options = productField(Blueprints::grant()->contents())['options'];
 
-    expect($options)->toHaveKey('kurs-neu')
-        ->and($options)->toHaveKey('legacy-slug')
-        ->and($options['legacy-slug'])->not->toBe('legacy-slug')
-        ->and($options['legacy-slug'])->toContain('legacy-slug');
+    expect($options)->toBe(['kurs-neu' => 'Neuer Kurs']);
 });
 
 it('reads a closure only when asked, never at registration', function () {

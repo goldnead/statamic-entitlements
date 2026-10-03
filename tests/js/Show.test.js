@@ -115,12 +115,35 @@ describe('the entitlement detail screen', () => {
         expect(wrapper.text()).toContain('Chargeback');
     });
 
-    it('labels every timeline instant as UTC', () => {
-        // Every date on this row decides access. A viewer-local rendering of one
-        // is a support conversation nobody can win.
-        const wrapper = mount(Show, { props });
+    it('renders timeline instants like core, with the UTC stamp one hover away', () => {
+        // Design review, 03.10.2026: the viewer's locale and timezone, as core
+        // renders dates, not a monospaced UTC stamp.
+        const wrapper = mount(Show, {
+            props: { ...props, timeline: [{ label: 'Created', value: '2026-08-03 10:00 UTC', iso: '2026-08-03T10:00:00Z' }] },
+        });
 
-        expect(wrapper.text()).toContain('2026-08-03 10:00 UTC');
+        const date = wrapper.find('[title="2026-08-03 10:00 UTC"]');
+        expect(date.text()).toBe('formatted(2026-08-03T10:00:00Z,datetime)');
+    });
+
+    it('names a user subject and links her user page, the key as a side note', () => {
+        const wrapper = mount(Show, {
+            props: {
+                ...props,
+                entitlement: {
+                    ...entitlement,
+                    subject_label: 'Clara Voss',
+                    subject_email: 'clara@example.test',
+                    subject_url: '/cp/users/abc/edit',
+                    subject_key: 'user:abc',
+                },
+            },
+        });
+
+        const link = wrapper.find('a[href="/cp/users/abc/edit"]');
+        expect(link.text()).toBe('Clara Voss');
+        expect(wrapper.text()).toContain('clara@example.test');
+        expect(wrapper.text()).toContain('user:abc');
     });
 
     describe('the limits panel', () => {

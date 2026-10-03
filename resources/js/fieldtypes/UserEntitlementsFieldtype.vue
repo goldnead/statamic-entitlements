@@ -13,7 +13,7 @@
  * replace the user page with whatever the grant action answers.
  */
 import { computed, getCurrentInstance, onMounted, ref } from 'vue';
-import { Fieldtype } from '@statamic/cms';
+import { DateFormatter, Fieldtype } from '@statamic/cms';
 import {
     Alert,
     Badge,
@@ -31,12 +31,6 @@ import {
     StackContent,
     StackFooter,
     StackHeader,
-    Table,
-    TableCell,
-    TableColumn,
-    TableColumns,
-    TableRow,
-    TableRows,
     Textarea,
 } from '@statamic/cms/ui';
 
@@ -98,13 +92,13 @@ const saving = ref(false);
 const errors = ref({});
 const form = ref({ product_slug: null, starts_at: null, expires_at: null });
 
+// Only catalogue entries; with a catalogue there is nothing to type.
 const productOptions = computed(() => products.value ?? []);
-const typedUnknown = computed(() => {
-    const value = form.value.product_slug;
 
-    return products.value !== null && value !== null && value !== ''
-        && !productOptions.value.some((option) => option.value === value && !option.unknown);
-});
+/** An ISO instant in the viewer's locale and timezone, as core renders dates. */
+function when(isoValue) {
+    return isoValue ? DateFormatter.format(isoValue, 'datetime') : null;
+}
 
 function openGrant() {
     form.value = { product_slug: null, starts_at: null, expires_at: null };
@@ -198,55 +192,44 @@ async function revoke() {
                 {{ __('entitlements::cp.user_section_empty') }}
             </Description>
 
-            <div v-if="rows.length" class="overflow-x-auto mb-3">
-                <Table>
-                    <TableColumns>
-                        <TableColumn>{{ __('entitlements::cp.user_col_access') }}</TableColumn>
-                        <TableColumn>{{ __('entitlements::cp.user_col_state') }}</TableColumn>
-                        <TableColumn>{{ __('entitlements::cp.user_col_source') }}</TableColumn>
-                        <TableColumn>{{ __('entitlements::cp.user_col_from') }}</TableColumn>
-                        <TableColumn>{{ __('entitlements::cp.user_col_until') }}</TableColumn>
-                        <TableColumn />
-                    </TableColumns>
-                    <TableRows>
-                        <TableRow v-for="row in rows" :key="row.id" :data-grant="row.id">
-                            <TableCell>
-                                <a :href="row.show_url" class="font-medium">{{ row.product_label }}</a>
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <code v-if="row.product_label !== row.product_slug" class="text-2xs text-gray-600 dark:text-gray-400">{{ row.product_slug }}</code>
-                                    <Badge
-                                        v-if="row.product_unknown"
-                                        pill
-                                        color="amber"
-                                        :text="__('entitlements::cp.product_unknown')"
-                                        v-tooltip="__('entitlements::cp.product_unknown_hint')"
-                                    />
-                                </div>
-                            </TableCell>
-                            <TableCell>
-                                <Badge pill :color="badgeColour[row.state] || 'gray'" :text="row.state_label" />
-                            </TableCell>
-                            <TableCell class="text-sm">{{ row.source }}</TableCell>
-                            <TableCell class="whitespace-nowrap font-mono text-xs">{{ row.starts_at || '–' }}</TableCell>
-                            <TableCell class="whitespace-nowrap font-mono text-xs">{{ row.expires_at || '–' }}</TableCell>
-                            <TableCell class="text-right">
-                                <Dropdown>
-                                    <DropdownMenu>
-                                        <DropdownItem :href="row.show_url" :text="__('entitlements::cp.user_open_grant')" icon="eye" />
-                                        <DropdownItem
-                                            v-if="row.can_revoke && !readOnly"
-                                            :text="__('entitlements::cp.user_revoke_action')"
-                                            icon="key"
-                                            variant="destructive"
-                                            @click="openRevoke(row)"
-                                        />
-                                    </DropdownMenu>
-                                </Dropdown>
-                            </TableCell>
-                        </TableRow>
-                    </TableRows>
-                </Table>
-            </div>
+            <!-- A list, not a table: each grant is a short block that wraps on a
+                 phone and keeps its "…" menu in reach, rather than a six-column
+                 table that scrolls sideways at 390 px. -->
+            <ul v-if="rows.length" class="divide-y divide-content-border mb-3">
+                <li v-for="row in rows" :key="row.id" :data-grant="row.id" class="py-3 flex items-start gap-3">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <a :href="row.show_url" class="font-medium">{{ row.product_label }}</a>
+                            <Badge pill :color="badgeColour[row.state] || 'gray'" :text="row.state_label" />
+                            <Badge
+                                v-if="row.product_unknown"
+                                pill
+                                color="amber"
+                                :text="__('entitlements::cp.product_unknown')"
+                                v-tooltip="__('entitlements::cp.product_unknown_hint')"
+                            />
+                        </div>
+                        <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-gray-400">
+                            <code v-if="row.product_label !== row.product_slug" class="text-2xs">{{ row.product_slug }}</code>
+                            <span>{{ __('entitlements::cp.user_col_source') }}: {{ row.source }}</span>
+                            <span>{{ __('entitlements::cp.user_col_from') }}: {{ when(row.starts_at) || '–' }}</span>
+                            <span>{{ __('entitlements::cp.user_col_until') }}: {{ when(row.expires_at) || '–' }}</span>
+                        </div>
+                    </div>
+                    <Dropdown>
+                        <DropdownMenu>
+                            <DropdownItem :href="row.show_url" :text="__('entitlements::cp.user_open_grant')" icon="eye" />
+                            <DropdownItem
+                                v-if="row.can_revoke && !readOnly"
+                                :text="__('entitlements::cp.user_revoke_action')"
+                                icon="key"
+                                variant="destructive"
+                                @click="openRevoke(row)"
+                            />
+                        </DropdownMenu>
+                    </Dropdown>
+                </li>
+            </ul>
 
             <div class="flex flex-wrap items-center gap-2">
                 <Button
@@ -293,12 +276,8 @@ async function revoke() {
                             :options="productOptions"
                             :placeholder="__('entitlements::cp.field_product_placeholder')"
                             searchable
-                            taggable
                         />
                         <Input v-else id="entitlements-user-product" v-model="form.product_slug" />
-                        <div v-if="typedUnknown" class="mt-2">
-                            <Badge pill color="amber" :text="__('entitlements::cp.product_unknown')" />
-                        </div>
                     </Field>
 
                     <Field

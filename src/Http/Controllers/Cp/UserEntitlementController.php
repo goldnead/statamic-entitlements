@@ -5,7 +5,6 @@ namespace Goldnead\Entitlements\Http\Controllers\Cp;
 use Goldnead\Entitlements\EntitlementManager;
 use Goldnead\Entitlements\Enums\EntitlementState;
 use Goldnead\Entitlements\Models\Entitlement;
-use Goldnead\Entitlements\Support\Blueprints;
 use Goldnead\Entitlements\Support\ProductCatalog;
 use Goldnead\Entitlements\Support\SourceRegistry;
 use Illuminate\Routing\Controller;
@@ -58,8 +57,8 @@ class UserEntitlementController extends Controller
                     'state_label' => $state->label(),
                     'grants_access' => $state->grantsAccess(),
                     'source' => $sources->label($grant->source),
-                    'starts_at' => $this->stamp($grant->starts_at),
-                    'expires_at' => $this->stamp($grant->expires_at),
+                    'starts_at' => $this->iso($grant->starts_at),
+                    'expires_at' => $this->iso($grant->expires_at),
                     'show_url' => cp_route('entitlements.show', ['entitlement' => $grant->getKey()]),
                     'revoke_url' => cp_route('entitlements.revoke', ['entitlement' => $grant->getKey()]),
                     'can_revoke' => $canRevoke && $state !== EntitlementState::Revoked,
@@ -79,23 +78,21 @@ class UserEntitlementController extends Controller
             // the section then asks for the slug as text, as the form does.
             // A list, not a map: a JSON object with numeric-looking slugs would
             // come back reordered.
+            // Only catalogue entries, as in the grant form.
             'products' => $canGrant && $products !== []
-                ? collect($catalog->options(Blueprints::slugsInUse()))
-                    ->map(fn (string $label, string|int $slug) => [
-                        'value' => (string) $slug,
-                        'label' => $label,
-                        'unknown' => ! array_key_exists((string) $slug, $products),
-                    ])
+                ? collect($catalog->options($products))
+                    ->map(fn (string $label, string|int $slug) => ['value' => (string) $slug, 'label' => $label])
                     ->values()
                     ->all()
                 : null,
-            'indexUrl' => cp_route('entitlements.index'),
+            // "All grants" opens the listing filtered to her.
+            'indexUrl' => cp_route('entitlements.index', ['subject' => $reference->key()]),
         ];
     }
 
-    /** Same rendering as the listing and the detail page: UTC, labelled. */
-    private function stamp(mixed $date): ?string
+    /** An ISO instant; the section formats it in the viewer's locale, as core does. */
+    private function iso(mixed $date): ?string
     {
-        return $date ? $date->format('Y-m-d H:i').' UTC' : null;
+        return $date ? $date->toIso8601ZuluString() : null;
     }
 }

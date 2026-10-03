@@ -380,8 +380,12 @@ Manual grants are always written with source `manual`; the form does not let an 
 
 The grant form picks a person through core's user search (name or email); type and ID remain for
 any other subject. With a [product catalogue](#extension-points) the product is picked by name in
-the grant form and in "new limits"; a slug outside the list can still be entered and is marked
-"not in the catalogue".
+the grant form and in "new limits", from the catalogue's entries only. Grants on a slug no source
+knows stay valid and are flagged "not in the catalogue" on the grant and on the user page.
+
+A user subject reads as the person: name, email and a link to her user page in the listing, on
+the grant and on the revocation form. The listing search matches names, emails and catalogue
+names as well as slugs, and `?subject=type:id` filters it to one subject.
 
 ### On the user page
 

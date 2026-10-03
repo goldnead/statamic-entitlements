@@ -181,9 +181,8 @@ it('lists a person\'s grants for the user page, with names, state and links', fu
         ->json();
 
     expect($response['rows'])->toHaveCount(2)
-        ->and(collect($response['products'])->firstWhere('value', 'kurs'))
-        ->toBe(['value' => 'kurs', 'label' => 'Der Kurs', 'unknown' => false])
-        ->and(collect($response['products'])->firstWhere('value', 'alt')['unknown'])->toBeTrue();
+        // Only what the catalogue knows; `alt` is granted but not offered.
+        ->and($response['products'])->toBe([['value' => 'kurs', 'label' => 'Der Kurs']]);
 
     $row = collect($response['rows'])->firstWhere('product_slug', 'kurs');
 
