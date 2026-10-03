@@ -75,6 +75,18 @@ describe('the Zugänge section on a user page', () => {
         expect(row.find('a').attributes('href')).toBe('/cp/entitlements/7');
     });
 
+    it('dates a revoked grant by its revocation, not by an empty "until"', async () => {
+        const base = answer();
+        const wrapper = mountSection({}, answer({
+            rows: [{ ...base.rows[0], state: 'revoked', state_label: 'Revoked', revoked_at: '2026-10-04T08:00:00Z', can_revoke: false }],
+        }));
+        await flushPromises();
+
+        const row = wrapper.find('[data-grant="7"]');
+        expect(row.text()).toContain('entitlements::cp.user_col_revoked: formatted(2026-10-04T08:00:00Z,datetime)');
+        expect(row.text()).not.toContain('entitlements::cp.user_col_until');
+    });
+
     it('asks to save first on a user that does not exist yet', () => {
         const wrapper = mountSection({ userId: null, rowsUrl: null });
 

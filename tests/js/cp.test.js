@@ -17,6 +17,7 @@ describe('the control panel entry point', () => {
         // of that contest and out of every other addon's way.
         expect(Object.keys(inertia.pages).sort()).toEqual([
             'entitlements::Entitlements/Index',
+            'entitlements::Entitlements/Revoke',
             'entitlements::Entitlements/Show',
             'entitlements::Limits/Index',
             'entitlements::SetupRequired',

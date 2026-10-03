@@ -59,6 +59,8 @@ class UserEntitlementController extends Controller
                     'source' => $sources->label($grant->source),
                     'starts_at' => $this->iso($grant->starts_at),
                     'expires_at' => $this->iso($grant->expires_at),
+                    // A revoked grant ended then, whatever its window said.
+                    'revoked_at' => $this->iso($grant->revoked_at),
                     'show_url' => cp_route('entitlements.show', ['entitlement' => $grant->getKey()]),
                     'revoke_url' => cp_route('entitlements.revoke', ['entitlement' => $grant->getKey()]),
                     'can_revoke' => $canRevoke && $state !== EntitlementState::Revoked,

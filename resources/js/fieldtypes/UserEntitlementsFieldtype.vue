@@ -213,7 +213,10 @@ async function revoke() {
                             <code v-if="row.product_label !== row.product_slug" class="text-2xs">{{ row.product_slug }}</code>
                             <span>{{ __('entitlements::cp.user_col_source') }}: {{ row.source }}</span>
                             <span>{{ __('entitlements::cp.user_col_from') }}: {{ when(row.starts_at) || '–' }}</span>
-                            <span>{{ __('entitlements::cp.user_col_until') }}: {{ when(row.expires_at) || '–' }}</span>
+                            <!-- A revoked grant ended when it was revoked; its old
+                                 window would say "until –" and mislead. -->
+                            <span v-if="row.revoked_at">{{ __('entitlements::cp.user_col_revoked') }}: {{ when(row.revoked_at) }}</span>
+                            <span v-else>{{ __('entitlements::cp.user_col_until') }}: {{ when(row.expires_at) || '–' }}</span>
                         </div>
                     </div>
                     <Dropdown>

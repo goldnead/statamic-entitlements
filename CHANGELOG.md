@@ -41,7 +41,13 @@ Picking instead of typing. Granting no longer asks for slugs and IDs from memory
 ### Changed
 
 - German Control Panel: the screens are called "Vergaben" (were "Berechtigungen", which clashed with
-  core's roles screen under the same section); permission labels follow. English is unchanged.
+  core's roles screen under the same section); permission labels follow. One set of terms
+  throughout: a grant is a "Vergabe", what is granted a "Zugang", granting is "Zugang
+  freischalten", revoking "Zugang entziehen". English is unchanged.
+- The revocation is its own page (`entitlements::Entitlements/Revoke`) instead of core's
+  PublishForm, whose button can only say "Save"; its button reads "Revoke access". Same route,
+  same validation, same permission.
+- Revoked grants in the user section show when they were revoked instead of an empty "until".
 - The grant detail page and the user section show dates in the viewer's locale and timezone, as
   core does; the UTC stamp is the tooltip on the detail page.
 - The manual grant accepts `subject_kind` (`user`, `other`) and `subject_user`. A request without

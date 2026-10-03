@@ -264,13 +264,18 @@ class EntitlementController extends Controller
         $subject = new SubjectReference($model->subject_type, $model->subject_id);
         $who = app(UserSubjects::class)->describeOne($subject)['name'] ?? $this->entitlements->subjectLabel($subject);
 
-        return PublishForm::make(Blueprints::revocation())
-            ->title(__('entitlements::cp.revoke_title', [
+        // An own page rather than core's PublishForm: that one labels its
+        // button "Save" and takes no other text, and a page that takes access
+        // away should say so on the button. The rule stays where it was: the
+        // POST is validated against Blueprints::revocation() as before.
+        return Inertia::render('entitlements::Entitlements/Revoke', [
+            'title' => __('entitlements::cp.revoke_title', [
                 'product' => app(ProductCatalog::class)->label($model->product_slug),
                 'subject' => $who,
-            ]))
-            ->icon('key')
-            ->submittingTo(cp_route('entitlements.revoke', ['entitlement' => $model->getKey()]), 'POST');
+            ]),
+            'submitUrl' => cp_route('entitlements.revoke', ['entitlement' => $model->getKey()]),
+            'cancelUrl' => cp_route('entitlements.show', ['entitlement' => $model->getKey()]),
+        ]);
     }
 
     public function revoke(FilteredRequest $request, int $entitlement)

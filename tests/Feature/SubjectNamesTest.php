@@ -115,6 +115,32 @@ it('names the person on the grant', function () {
         );
 });
 
+it('renders the revocation as its own page, whose button says what it does', function () {
+    // Core's PublishForm page labels its button "Save" and takes no other
+    // text; "Speichern" on a page that takes access away undersold it.
+    $grant = Entitlements::grant($this->clara, 'kurs', 'manual');
+
+    $this->actingAs($this->admin)
+        ->get(cp_route('entitlements.revoke.form', ['entitlement' => $grant->getKey()]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('entitlements::Entitlements/Revoke')
+            ->where('submitUrl', cp_route('entitlements.revoke', ['entitlement' => $grant->getKey()]))
+            ->where('cancelUrl', cp_route('entitlements.show', ['entitlement' => $grant->getKey()]))
+        );
+});
+
+it('dates a revoked grant on the user page by its revocation', function () {
+    $grant = Entitlements::grant($this->clara, 'kurs', 'manual');
+    Entitlements::revoke($grant, 'Erstattet');
+
+    $row = $this->actingAs($this->admin)
+        ->getJson(cp_route('entitlements.user', ['userId' => $this->clara->id()]))
+        ->json('rows.0');
+
+    expect($row['revoked_at'])->not->toBeNull();
+});
+
 it('names the person on the revocation form', function () {
     $grant = Entitlements::grant($this->clara, 'kurs', 'manual');
 

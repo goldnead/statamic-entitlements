@@ -2,6 +2,7 @@ import { components, inertia } from '@statamic/cms/api';
 
 import Index from './pages/Entitlements/Index.vue';
 import Show from './pages/Entitlements/Show.vue';
+import Revoke from './pages/Entitlements/Revoke.vue';
 import SetupRequired from './pages/SetupRequired.vue';
 import LimitsIndex from './pages/Limits/Index.vue';
 import Wiring from './pages/Wiring.vue';
@@ -20,6 +21,7 @@ import UserEntitlementsFieldtype from './fieldtypes/UserEntitlementsFieldtype.vu
 Statamic.booting(() => {
     inertia.register('entitlements::Entitlements/Index', Index);
     inertia.register('entitlements::Entitlements/Show', Show);
+    inertia.register('entitlements::Entitlements/Revoke', Revoke);
     inertia.register('entitlements::SetupRequired', SetupRequired);
     inertia.register('entitlements::Limits/Index', LimitsIndex);
     inertia.register('entitlements::Wiring', Wiring);

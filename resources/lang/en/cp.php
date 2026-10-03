@@ -194,6 +194,7 @@ return [
     'user_col_source' => 'Source',
     'user_col_from' => 'From',
     'user_col_until' => 'Until',
+    'user_col_revoked' => 'Revoked',
     'user_grant_action' => 'Grant access',
     'user_grant_title' => 'Grant access',
     'user_grant_intro' => 'Written like a manual grant under Users > Entitlements: source manual, with your name.',
