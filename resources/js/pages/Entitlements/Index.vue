@@ -114,8 +114,13 @@ const badgeColour = {
                 @refreshing="reload"
             >
                 <template #cell-product_slug="{ row }">
-                    <Link :href="row.show_url">{{ row.product_slug }}</Link>
-                </template>
+                    <!-- The catalogue's name when an addon registered one; the slug
+                         rides along, since it is what search matches. Unknown
+                         slugs are flagged on the grant and the user page, not
+                         here: on a site with an old catalogue every second row
+                         would carry the same badge. -->
+                    <Link :href="row.show_url">{{ row.product_label || row.product_slug }}</Link>
+                    <code v-if="row.product_label && row.product_label !== row.product_slug" class="ms-2 text-2xs text-gray-600 dark:text-gray-400">{{ row.product_slug }}</code>                </template>
 
                 <template #cell-subject="{ row }">
                     <!-- subjectLabel() already falls back to the raw key, so

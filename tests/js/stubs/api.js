@@ -16,3 +16,14 @@ export const inertia = {
         this.pages = {};
     },
 };
+
+/** Fieldtype components, by the name core's publish field looks up. */
+export const components = {
+    registered: {},
+    register(name, component) {
+        this.registered[name] = component;
+    },
+    reset() {
+        this.registered = {};
+    },
+};

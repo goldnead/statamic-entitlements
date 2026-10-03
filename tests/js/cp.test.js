@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { inertia } from './stubs/api.js';
+import { components, inertia } from './stubs/api.js';
 
 beforeEach(() => {
     inertia.reset();
@@ -22,5 +22,9 @@ describe('the control panel entry point', () => {
             'entitlements::SetupRequired',
             'entitlements::Wiring',
         ]);
+
+        // Core resolves `{type}-fieldtype`. Anything else is the red "Component
+        // … does not exist" the old user page showed.
+        expect(Object.keys(components.registered)).toContain('user_entitlements-fieldtype');
     });
 });

@@ -4,6 +4,40 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this package
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Picking instead of typing. Granting no longer asks for slugs and IDs from memory.
+
+### Added
+
+- **Product catalogue.** `Entitlements::registerProducts()` (a closure, an array, an object with
+  `grantableProducts()`, or the container tag `entitlements.product-catalog`) lets another addon
+  announce grantable products as `slug => label` or `slug => ['label' => …, 'group' => …]`. Read
+  when a form asks, never at boot; a failing source is logged and skipped. Names only, never a
+  whitelist: an unregistered slug still writes, resolves and grants. `Entitlements::grantableProducts()`
+  reads it. statamic-products registers its accesses from its next release.
+- **Grant form picks the person.** "Granted to" is a person by default, chosen through core's
+  `users` search by name or email; the reference is derived by the bound `SubjectResolver`, as
+  `Entitlements::grant($user, …)` does. Type and ID stay available for every other subject.
+- **Product pickers.** With a catalogue, the product in the grant form and in "new limits" is a
+  searchable select with names. Slugs not in the list can still be entered (`taggable`); slugs
+  already granted that no source knows are offered, marked "not in the catalogue". Without any
+  catalogue both stay free text.
+- **"Zugänge" section for user pages.** The fieldtype `user_entitlements` lists a user's grants
+  (name, state, source, from, until, link to the grant), grants an access from a stack (picker,
+  optional start and end) and revokes with a mandatory reason. It posts to the manual grant and
+  the revocation, so it writes exactly what Users > Entitlements writes (source `manual`, actor)
+  and is gated by the same permissions. It stores nothing on the user. New read route
+  `entitlements.user` (`view entitlements`).
+- Grant detail, listing and limits show the product name next to the slug; the grant detail and
+  the user section flag a slug no catalogue source knows.
+
+### Changed
+
+- The manual grant accepts `subject_kind` (`user`, `other`) and `subject_user`. A request without
+  `subject_kind` that sends `subject_type` is treated as `other`, so existing integrations keep
+  working unchanged.
+
 ## [1.5.0] — 2026-09-25
 
 ### Notes

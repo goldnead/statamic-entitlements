@@ -22,6 +22,8 @@ use Illuminate\Support\Facades\Facade;
  * @method static string subjectLabel(\Goldnead\Entitlements\Support\SubjectReference $reference)
  * @method static \Illuminate\Database\Eloquent\Builder forSubjects(iterable $subjects)
  * @method static void extendSubjects(mixed $expander)
+ * @method static void registerProducts(mixed $source)
+ * @method static array<string, array{slug: string, label: string, group: string|null}> grantableProducts()
  * @method static list<\Goldnead\Entitlements\Support\SubjectReference> subjectsOf(mixed $subject)
  * @method static int|null limit(mixed $subject, string $key)
  * @method static \Goldnead\Entitlements\Limits\Quota quota(mixed $subject, string $key, ?int $current = null)

@@ -74,12 +74,12 @@ const badgeColour = {
 </script>
 
 <template>
-    <Head :title="[entitlement.product_slug, __('entitlements::cp.title')]" />
+    <Head :title="[entitlement.product_label || entitlement.product_slug, __('entitlements::cp.title')]" />
 
     <!-- Core's narrow variant for detail screens. data-max-width-wrapper keeps the
          header's own full-width toggle working; a bare max-w-* ignores it. -->
     <div class="max-w-5xl 3xl:max-w-6xl mx-auto" data-max-width-wrapper>
-        <Header :title="entitlement.product_slug" icon="key">
+        <Header :title="entitlement.product_label || entitlement.product_slug" icon="key">
             <ButtonGroup role="group" :aria-label="__('entitlements::cp.grant_details')">
                 <Button
                     :href="indexUrl"
@@ -162,7 +162,16 @@ const badgeColour = {
                         </div>
                         <div class="py-3 flex flex-wrap gap-2 justify-between">
                             <dt class="text-gray-500">{{ __('entitlements::cp.product') }}</dt>
-                            <dd class="font-mono text-sm">{{ entitlement.product_slug }}</dd>
+                            <dd class="text-sm text-end">
+                                <span v-if="entitlement.product_label && entitlement.product_label !== entitlement.product_slug">{{ entitlement.product_label }}</span>
+                                <code class="ms-2 text-xs">{{ entitlement.product_slug }}</code>
+                                <!-- Still a valid grant. Flagged because nobody can say
+                                     any more what it opens. -->
+                                <div v-if="entitlement.product_unknown" class="mt-1">
+                                    <Badge pill color="amber" :text="__('entitlements::cp.product_unknown')" />
+                                    <Description class="mt-1">{{ __('entitlements::cp.product_unknown_hint') }}</Description>
+                                </div>
+                            </dd>
                         </div>
                         <div class="py-3 flex flex-wrap gap-2 justify-between">
                             <dt class="text-gray-500">{{ __('entitlements::cp.source') }}</dt>

@@ -9,6 +9,7 @@ use Goldnead\Entitlements\Limits\LimitCatalog;
 use Goldnead\Entitlements\Models\Entitlement;
 use Goldnead\Entitlements\Query\Scopes\Filters\EntitlementFilter;
 use Goldnead\Entitlements\Support\Blueprints;
+use Goldnead\Entitlements\Support\ProductCatalog;
 use Goldnead\Entitlements\Support\Setup;
 use Goldnead\Entitlements\Support\SourceRegistry;
 use Goldnead\Entitlements\Support\SubjectReference;
@@ -17,6 +18,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Statamic\CP\Column;
 use Statamic\CP\PublishForm;
@@ -103,13 +105,19 @@ class EntitlementController extends Controller
     {
         Gate::authorize('grant entitlements');
 
-        $values = PublishForm::make(Blueprints::grant())->submit($request->all());
+        $input = $request->all();
+
+        // A request without the switch is one written before it existed (an
+        // integration, a test, a bookmarked script): it sent type and ID, so it
+        // means "other". The form itself always sends the switch.
+        $input['subject_kind'] ??= filled($input['subject_user'] ?? null) || blank($input['subject_type'] ?? null)
+            ? 'user'
+            : 'other';
+
+        $values = PublishForm::make(Blueprints::grant())->submit($input);
 
         $entitlement = $this->entitlements->grant(
-            subject: new SubjectReference(
-                trim((string) ($values['subject_type'] ?? '')),
-                trim((string) ($values['subject_id'] ?? '')),
-            ),
+            subject: $this->subject($values),
             productSlug: (string) ($values['product_slug'] ?? ''),
             // Not taken from the form. A grant made by hand in the Control Panel
             // has exactly one honest source, and letting an admin type
@@ -139,6 +147,8 @@ class EntitlementController extends Controller
         $model = Entitlement::query()->findOrFail($entitlement);
 
         $state = $model->state();
+        $catalog = app(ProductCatalog::class);
+        $products = $catalog->all();
 
         return Inertia::render('entitlements::Entitlements/Show', [
             'entitlement' => [
@@ -149,6 +159,10 @@ class EntitlementController extends Controller
                     new SubjectReference($model->subject_type, $model->subject_id)
                 ),
                 'product_slug' => $model->product_slug,
+                'product_label' => $catalog->label($model->product_slug, $products),
+                // Unknown to a catalogue that exists: still a valid grant, but
+                // worth a look, since nobody can say any more what it opens.
+                'product_unknown' => $catalog->isUnknown($model->product_slug, $products),
                 'source' => $model->source,
                 'source_label' => app(SourceRegistry::class)->label($model->source),
                 'source_ref' => $model->hasSourceRef() ? $model->source_ref : null,
@@ -228,7 +242,7 @@ class EntitlementController extends Controller
         $model = Entitlement::query()->findOrFail($entitlement);
 
         return PublishForm::make(Blueprints::revocation())
-            ->title(__('entitlements::cp.revoke_title', ['product' => $model->product_slug]))
+            ->title(__('entitlements::cp.revoke_title', ['product' => app(ProductCatalog::class)->label($model->product_slug)]))
             ->icon('key')
             ->submittingTo(cp_route('entitlements.revoke', ['entitlement' => $model->getKey()]), 'POST');
     }
@@ -364,8 +378,11 @@ class EntitlementController extends Controller
             ->paginate($this->perPage($request->input('perPage')))
             ->withQueryString();
 
+        $products = app(ProductCatalog::class)->all();
+
         return [
-            'data' => array_map(fn (Entitlement $e) => $this->row($e), $paginator->items()),
+            // The catalogue once per page, not once per row: a source may query.
+            'data' => array_map(fn (Entitlement $e) => $this->row($e, $products), $paginator->items()),
             'meta' => [
                 'columns' => collect($this->columns())->map->toArray()->all(),
                 'activeFilterBadges' => $badges,
@@ -419,14 +436,20 @@ class EntitlementController extends Controller
         ];
     }
 
-    /** @return array<string, mixed> */
-    private function row(Entitlement $entitlement): array
+    /**
+     * @param  array<string, array{slug: string, label: string, group: string|null}>  $products
+     * @return array<string, mixed>
+     */
+    private function row(Entitlement $entitlement, array $products = []): array
     {
         $state = $entitlement->state();
+        $catalog = app(ProductCatalog::class);
 
         return [
             'id' => $entitlement->getKey(),
             'product_slug' => $entitlement->product_slug,
+            'product_label' => $catalog->label($entitlement->product_slug, $products),
+            'product_unknown' => $catalog->isUnknown($entitlement->product_slug, $products),
             // The resolver's label when the host provides one, the raw key when
             // it does not. The detail view has always asked; the listing did
             // not, so a host that had gone to the trouble of binding a
@@ -446,6 +469,38 @@ class EntitlementController extends Controller
             'expires_at' => $this->stamp($entitlement->expires_at),
             'show_url' => cp_route('entitlements.show', ['entitlement' => $entitlement->getKey()]),
         ];
+    }
+
+    /**
+     * Who the grant is for: the picked person, or type and ID as typed.
+     *
+     * The person is turned into a reference by the bound SubjectResolver, the
+     * same call `Entitlements::grant($user, …)` makes from code. So a grant
+     * from the picker and one from a checkout land on the same subject whether
+     * the site keeps users in files or in Eloquent, and the user page finds
+     * both.
+     *
+     * @param  array<string, mixed>  $values
+     */
+    private function subject(array $values): SubjectReference
+    {
+        if (($values['subject_kind'] ?? 'other') === 'user') {
+            $id = $this->single($values['subject_user'] ?? null);
+            $user = $id === null ? null : StatamicUser::find($id);
+
+            if ($user === null) {
+                throw ValidationException::withMessages([
+                    'subject_user' => __('entitlements::cp.subject_user_missing'),
+                ]);
+            }
+
+            return $this->entitlements->reference($user);
+        }
+
+        return new SubjectReference(
+            trim((string) ($values['subject_type'] ?? '')),
+            trim((string) ($values['subject_id'] ?? '')),
+        );
     }
 
     private function single(mixed $value): ?string

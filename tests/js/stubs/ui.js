@@ -144,9 +144,9 @@ export const Listing = {
 
 export const ConfirmationModal = {
     name: 'ConfirmationModal',
-    props: ['open', 'title', 'bodyText', 'buttonText', 'danger'],
+    props: ['open', 'title', 'bodyText', 'buttonText', 'danger', 'busy', 'disabled'],
     emits: ['update:open', 'confirm'],
-    setup(props, { emit }) {
+    setup(props, { emit, slots }) {
         return () =>
             props.open
                 ? h(
@@ -154,9 +154,66 @@ export const ConfirmationModal = {
                       { 'data-stub': 'ConfirmationModal', 'data-title': props.title },
                       [
                           h('p', props.bodyText),
-                          h('button', { 'data-role': 'confirm', onClick: () => emit('confirm') }, props.buttonText),
+                          slots.default?.(),
+                          h(
+                              'button',
+                              { 'data-role': 'confirm', disabled: props.disabled || undefined, onClick: () => emit('confirm') },
+                              props.buttonText
+                          ),
                       ]
                   )
                 : null;
     },
 };
+
+export const Alert = textual('div', 'Alert');
+
+/** Renders its default slot when open, so a test can reach the fields inside. */
+export const Stack = {
+    name: 'Stack',
+    props: ['open', 'title', 'size', 'icon'],
+    emits: ['update:open'],
+    setup(props, { slots }) {
+        return () => (props.open ? h('aside', { 'data-stub': 'Stack', 'data-title': props.title }, slots.default?.()) : null);
+    },
+};
+export const StackHeader = textual('header', 'StackHeader');
+export const StackContent = container('div', 'StackContent');
+export const StackFooter = container('footer', 'StackFooter');
+
+export const Field = {
+    name: 'Field',
+    props: ['label', 'instructions', 'errors', 'error', 'required', 'id'],
+    setup(props, { slots }) {
+        return () =>
+            h('div', { 'data-stub': 'Field', 'data-label': props.label }, [
+                props.label,
+                slots.default?.(),
+                props.errors?.length ? h('p', { 'data-role': 'error' }, props.errors[0]) : null,
+                props.error ? h('p', { 'data-role': 'error' }, props.error) : null,
+            ]);
+    },
+};
+
+function model(tag, name, extra = []) {
+    return {
+        name,
+        props: ['modelValue', 'options', ...extra],
+        emits: ['update:modelValue'],
+        setup(props, { emit, attrs }) {
+            return () =>
+                h(tag, {
+                    'data-stub': name,
+                    'data-options': props.options ? JSON.stringify(props.options) : undefined,
+                    value: props.modelValue ?? '',
+                    ...attrs,
+                    onInput: (e) => emit('update:modelValue', e.target.value),
+                });
+        },
+    };
+}
+
+export const Combobox = model('input', 'Combobox', ['placeholder', 'searchable', 'taggable']);
+export const Input = model('input', 'Input');
+export const Textarea = model('textarea', 'Textarea', ['rows']);
+export const DatePicker = model('input', 'DatePicker', ['granularity', 'clearable']);

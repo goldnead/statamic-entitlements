@@ -3,8 +3,10 @@
 namespace Goldnead\Entitlements\Support;
 
 use Goldnead\Entitlements\Limits\LimitCatalog;
+use Goldnead\Entitlements\Models\Entitlement;
 use Statamic\Facades\Blueprint;
 use Statamic\Fields\Blueprint as BlueprintInstance;
+use Throwable;
 
 /**
  * The blueprints behind the two Control Panel forms.
@@ -40,6 +42,36 @@ class Blueprints
                             'display' => __('entitlements::cp.section_subject'),
                             'instructions' => __('entitlements::cp.section_subject_instructions'),
                             'fields' => [
+                                // A person by default, picked through core's
+                                // own user search. Nobody should have to know
+                                // that Anna is `App\Models\User:42`; the
+                                // reference is derived from the user the same
+                                // way every other write path derives it.
+                                [
+                                    'handle' => 'subject_kind',
+                                    'field' => [
+                                        'type' => 'button_group',
+                                        'display' => __('entitlements::cp.field_subject_kind'),
+                                        'options' => [
+                                            'user' => __('entitlements::cp.subject_kind_user'),
+                                            'other' => __('entitlements::cp.subject_kind_other'),
+                                        ],
+                                        'default' => 'user',
+                                        'validate' => ['required', 'in:user,other'],
+                                    ],
+                                ],
+                                [
+                                    'handle' => 'subject_user',
+                                    'field' => [
+                                        'type' => 'users',
+                                        'display' => __('entitlements::cp.field_subject_user'),
+                                        'instructions' => __('entitlements::cp.field_subject_user_instructions'),
+                                        'max_items' => 1,
+                                        'mode' => 'select',
+                                        'if' => ['subject_kind' => 'equals user'],
+                                        'validate' => ['required_if:subject_kind,user'],
+                                    ],
+                                ],
                                 [
                                     'handle' => 'subject_type',
                                     'field' => self::subjectTypeField(),
@@ -51,7 +83,8 @@ class Blueprints
                                         'display' => __('entitlements::cp.field_subject_id'),
                                         'instructions' => __('entitlements::cp.field_subject_id_instructions'),
                                         'width' => 50,
-                                        'validate' => ['required', 'max:64'],
+                                        'if' => ['subject_kind' => 'equals other'],
+                                        'validate' => ['required_if:subject_kind,other', 'max:64'],
                                     ],
                                 ],
                             ],
@@ -61,12 +94,10 @@ class Blueprints
                             'fields' => [
                                 [
                                     'handle' => 'product_slug',
-                                    'field' => [
-                                        'type' => 'text',
-                                        'display' => __('entitlements::cp.field_product_slug'),
-                                        'instructions' => __('entitlements::cp.field_product_slug_instructions'),
-                                        'validate' => ['required', 'max:191'],
-                                    ],
+                                    'field' => self::productField(
+                                        __('entitlements::cp.field_product_slug_instructions'),
+                                        self::slugsInUse(),
+                                    ),
                                 ],
                                 [
                                     'handle' => 'source_ref',
@@ -168,12 +199,10 @@ class Blueprints
         if ($creating) {
             $fields[] = [
                 'handle' => 'product_slug',
-                'field' => [
-                    'type' => 'text',
-                    'display' => __('entitlements::cp.field_product_slug'),
-                    'instructions' => __('entitlements::cp.limits_product_instructions'),
-                    'validate' => ['required', 'max:191'],
-                ],
+                'field' => self::productField(
+                    __('entitlements::cp.limits_product_instructions'),
+                    self::slugsInUse(),
+                ),
             ];
         }
 
@@ -272,11 +301,67 @@ class Blueprints
             'display' => __('entitlements::cp.field_subject_type'),
             'instructions' => __('entitlements::cp.field_subject_type_instructions'),
             'width' => 50,
-            'validate' => ['required', 'max:160'],
+            'if' => ['subject_kind' => 'equals other'],
+            'validate' => ['required_if:subject_kind,other', 'max:160'],
         ];
 
         return $types === []
             ? $base + ['type' => 'text']
             : $base + ['type' => 'select', 'options' => $types, 'clearable' => false];
+    }
+
+    /**
+     * A picker with names when some addon has registered its products, free
+     * text when none has.
+     *
+     * `taggable`, because the catalogue names products and never decides which
+     * may be granted: a slug from the old system, or one a site handles in its
+     * own code, must still be enterable. Such slugs already in use are offered
+     * too, flagged in their label ({@see ProductCatalog::options()}).
+     *
+     * @param  list<string>  $inUse
+     * @return array<string, mixed>
+     */
+    public static function productField(string $instructions, array $inUse = []): array
+    {
+        $base = ['validate' => ['required', 'max:191']];
+
+        $catalog = app(ProductCatalog::class);
+
+        if (! $catalog->available()) {
+            return $base + [
+                'type' => 'text',
+                'display' => __('entitlements::cp.field_product_slug'),
+                'instructions' => $instructions,
+            ];
+        }
+
+        return $base + [
+            'type' => 'select',
+            'display' => __('entitlements::cp.field_product'),
+            'instructions' => __('entitlements::cp.field_product_instructions'),
+            'options' => $catalog->options($inUse),
+            'taggable' => true,
+            'searchable' => true,
+            'clearable' => false,
+            'placeholder' => __('entitlements::cp.field_product_placeholder'),
+        ];
+    }
+
+    /**
+     * Every product slug somebody holds a grant for, for flagging the ones no
+     * catalogue source knows. One grouped query; empty before `migrate`.
+     *
+     * @return list<string>
+     */
+    public static function slugsInUse(): array
+    {
+        try {
+            return Entitlement::query()->distinct()->orderBy('product_slug')->pluck('product_slug')
+                ->map(fn ($slug) => (string) $slug)
+                ->all();
+        } catch (Throwable) {
+            return [];
+        }
     }
 }

@@ -1,10 +1,11 @@
-import { inertia } from '@statamic/cms/api';
+import { components, inertia } from '@statamic/cms/api';
 
 import Index from './pages/Entitlements/Index.vue';
 import Show from './pages/Entitlements/Show.vue';
 import SetupRequired from './pages/SetupRequired.vue';
 import LimitsIndex from './pages/Limits/Index.vue';
 import Wiring from './pages/Wiring.vue';
+import UserEntitlementsFieldtype from './fieldtypes/UserEntitlementsFieldtype.vue';
 
 /*
  * Addon Inertia pages are resolved by name after core's own pages have been
@@ -22,4 +23,8 @@ Statamic.booting(() => {
     inertia.register('entitlements::SetupRequired', SetupRequired);
     inertia.register('entitlements::Limits/Index', LimitsIndex);
     inertia.register('entitlements::Wiring', Wiring);
+
+    // The "Zugänge" section on user pages. The name is what core's publish
+    // field looks up: `{handle}-fieldtype`.
+    components.register('user_entitlements-fieldtype', UserEntitlementsFieldtype);
 });
