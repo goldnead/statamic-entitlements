@@ -3,6 +3,7 @@
 use Goldnead\Entitlements\Http\Controllers\Cp\EntitlementController;
 use Goldnead\Entitlements\Http\Controllers\Cp\LimitController;
 use Goldnead\Entitlements\Http\Controllers\Cp\UsageController;
+use Goldnead\Entitlements\Http\Controllers\Cp\UserEntitlementController;
 use Goldnead\Entitlements\Http\Controllers\Cp\WiringController;
 use Illuminate\Support\Facades\Route;
 
@@ -39,6 +40,11 @@ Route::prefix('entitlements')->name('entitlements.')->group(function () {
     Route::post('usage/reset', [UsageController::class, 'reset'])->name('usage.reset');
 
     Route::get('wiring', [WiringController::class, 'index'])->name('wiring');
+
+    // The "Zugänge" section on a user page reads from here. `{userId}`, not
+    // `{user}`: a host app may bind `user` to its model, and that binder would
+    // claim this route too (see RouteParameterCollisionTest).
+    Route::get('users/{userId}', [UserEntitlementController::class, 'show'])->name('user')->where('userId', '[^/]+');
 
     Route::get('create', [EntitlementController::class, 'create'])->name('create');
     Route::post('/', [EntitlementController::class, 'store'])->name('store');

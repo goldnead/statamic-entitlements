@@ -20,6 +20,7 @@ use Goldnead\Entitlements\Limits\UsageReceipt;
 use Goldnead\Entitlements\Mail\SendLimitReachedMail;
 use Goldnead\Entitlements\Models\Entitlement;
 use Goldnead\Entitlements\Support\AccessDecision;
+use Goldnead\Entitlements\Support\ProductCatalog;
 use Goldnead\Entitlements\Support\StateResolver;
 use Goldnead\Entitlements\Support\SubjectExtensions;
 use Goldnead\Entitlements\Support\SubjectReference;
@@ -506,6 +507,32 @@ class EntitlementManager
     public function extendSubjects(mixed $expander): void
     {
         app(SubjectExtensions::class)->register($expander);
+    }
+
+    /**
+     * Announce grantable products by name, for the Control Panel's pickers.
+     *
+     * Takes a closure returning `slug => label` or `slug => ['label' => …,
+     * 'group' => …]`, such an array directly, an object with
+     * `grantableProducts()`, or its class name. Closures are read when a form
+     * asks, not now. Names only: an unregistered slug still grants access.
+     * See {@see ProductCatalog}.
+     *
+     * @param  callable(): iterable<mixed>|iterable<mixed>|object|class-string  $source
+     */
+    public function registerProducts(mixed $source): void
+    {
+        app(ProductCatalog::class)->register($source);
+    }
+
+    /**
+     * Every product the registered sources announce, keyed by slug.
+     *
+     * @return array<string, array{slug: string, label: string, group: string|null}>
+     */
+    public function grantableProducts(): array
+    {
+        return app(ProductCatalog::class)->all();
     }
 
     /**

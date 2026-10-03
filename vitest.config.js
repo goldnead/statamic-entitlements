@@ -12,6 +12,8 @@ export default defineConfig({
             '@statamic/cms/ui': fileURLToPath(new URL('./tests/js/stubs/ui.js', import.meta.url)),
             '@statamic/cms/inertia': fileURLToPath(new URL('./tests/js/stubs/inertia.js', import.meta.url)),
             '@statamic/cms/api': fileURLToPath(new URL('./tests/js/stubs/api.js', import.meta.url)),
+            // After the three subpaths: an alias is a prefix match.
+            '@statamic/cms': fileURLToPath(new URL('./tests/js/stubs/cms.js', import.meta.url)),
         },
     },
     test: {

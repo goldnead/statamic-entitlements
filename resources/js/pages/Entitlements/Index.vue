@@ -21,6 +21,7 @@ const props = defineProps({
     createUrl: { type: String, required: true },
     canGrant: { type: Boolean, default: false },
     perPage: { type: Number, default: 50 },
+    subject: { type: Object, default: null },
 });
 
 // Nothing here is a config value. The page receives urls, labels and booleans
@@ -77,7 +78,18 @@ const badgeColour = {
         </template>
 
         <template v-else>
-            <Header :title="__('entitlements::cp.title')" icon="key">
+            <!-- Opened from a user page ("all grants"): this person's grants only,
+                 and the title says whose. -->
+            <Header
+                :title="subject ? __('entitlements::cp.grants_of', { subject: subject.label }) : __('entitlements::cp.title')"
+                icon="key"
+            >
+                <Button
+                    v-if="subject"
+                    :href="subject.clearUrl"
+                    :text="__('entitlements::cp.clear_subject_filter')"
+                    variant="ghost"
+                />
                 <CommandPaletteItem
                     v-if="canGrant"
                     category="Actions"
@@ -111,11 +123,17 @@ const badgeColour = {
                 sort-column="created_at"
                 sort-direction="desc"
                 push-query
+                :additional-parameters="subject ? { subject: subject.key } : {}"
                 @refreshing="reload"
             >
                 <template #cell-product_slug="{ row }">
-                    <Link :href="row.show_url">{{ row.product_slug }}</Link>
-                </template>
+                    <!-- The catalogue's name when an addon registered one; the slug
+                         rides along, since it is what search matches. Unknown
+                         slugs are flagged on the grant and the user page, not
+                         here: on a site with an old catalogue every second row
+                         would carry the same badge. -->
+                    <Link :href="row.show_url">{{ row.product_label || row.product_slug }}</Link>
+                    <code v-if="row.product_label && row.product_label !== row.product_slug" class="ms-2 text-2xs text-gray-600 dark:text-gray-400">{{ row.product_slug }}</code>                </template>
 
                 <template #cell-subject="{ row }">
                     <!-- subjectLabel() already falls back to the raw key, so
@@ -124,7 +142,13 @@ const badgeColour = {
                          that is what it is. The key rides along only when it
                          adds something: a name is a display, not an identity,
                          and two members can share one. -->
-                    <template v-if="row.subject !== row.subject_key">
+                    <!-- A user subject: her name, linked to her user page, with the
+                         email under it. The key lives on the grant's own page. -->
+                    <template v-if="row.subject_url">
+                        <Link :href="row.subject_url" class="text-sm">{{ row.subject }}</Link>
+                        <div v-if="row.subject_email && row.subject_email !== row.subject" class="text-2xs text-gray-600 dark:text-gray-400">{{ row.subject_email }}</div>
+                    </template>
+                    <template v-else-if="row.subject !== row.subject_key">
                         <span class="text-sm">{{ row.subject }}</span>
                         <span class="font-mono text-2xs text-gray-500 dark:text-gray-400 ms-1.5">{{ row.subject_key }}</span>
                     </template>

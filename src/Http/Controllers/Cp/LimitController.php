@@ -6,6 +6,7 @@ use Goldnead\Entitlements\Limits\LimitCatalog;
 use Goldnead\Entitlements\Limits\QuotaManager;
 use Goldnead\Entitlements\Models\Entitlement;
 use Goldnead\Entitlements\Support\Blueprints;
+use Goldnead\Entitlements\Support\ProductCatalog;
 use Goldnead\Entitlements\Support\Setup;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -52,12 +53,17 @@ class LimitController extends Controller
         $keys = $this->catalog->keys();
         $canManage = Gate::allows('manage entitlements limits');
 
-        $rows = array_map(function (string $slug) use ($limits, $keys, $canManage, $counts) {
+        $catalog = app(ProductCatalog::class);
+        $products = $catalog->all();
+
+        $rows = array_map(function (string $slug) use ($limits, $keys, $canManage, $counts, $catalog, $products) {
             $own = $limits[$slug] ?? [];
 
             return [
                 'id' => $slug,
                 'product_slug' => $slug,
+                'product_label' => $catalog->label($slug, $products),
+                'product_unknown' => $catalog->isUnknown($slug, $products),
                 'limits' => array_values(array_map(fn (string $key, array $limit) => [
                     'key' => $key,
                     'label' => $keys[$key]['label'] ?? $key,
@@ -127,7 +133,7 @@ class LimitController extends Controller
         }
 
         return PublishForm::make(Blueprints::limits(creating: false))
-            ->title(__('entitlements::cp.limits_edit', ['product' => $product]))
+            ->title(__('entitlements::cp.limits_edit', ['product' => app(ProductCatalog::class)->label($product)]))
             ->icon('key')
             ->values(['limits' => $rows])
             ->submittingTo(cp_route('entitlements.limits.update', ['product' => $product]), 'PATCH');

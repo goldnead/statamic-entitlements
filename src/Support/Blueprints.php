@@ -40,6 +40,36 @@ class Blueprints
                             'display' => __('entitlements::cp.section_subject'),
                             'instructions' => __('entitlements::cp.section_subject_instructions'),
                             'fields' => [
+                                // A person by default, picked through core's
+                                // own user search. Nobody should have to know
+                                // that Anna is `App\Models\User:42`; the
+                                // reference is derived from the user the same
+                                // way every other write path derives it.
+                                [
+                                    'handle' => 'subject_kind',
+                                    'field' => [
+                                        'type' => 'button_group',
+                                        'display' => __('entitlements::cp.field_subject_kind'),
+                                        'options' => [
+                                            'user' => __('entitlements::cp.subject_kind_user'),
+                                            'other' => __('entitlements::cp.subject_kind_other'),
+                                        ],
+                                        'default' => 'user',
+                                        'validate' => ['required', 'in:user,other'],
+                                    ],
+                                ],
+                                [
+                                    'handle' => 'subject_user',
+                                    'field' => [
+                                        'type' => 'users',
+                                        'display' => __('entitlements::cp.field_subject_user'),
+                                        'instructions' => __('entitlements::cp.field_subject_user_instructions'),
+                                        'max_items' => 1,
+                                        'mode' => 'select',
+                                        'if' => ['subject_kind' => 'equals user'],
+                                        'validate' => ['required_if:subject_kind,user'],
+                                    ],
+                                ],
                                 [
                                     'handle' => 'subject_type',
                                     'field' => self::subjectTypeField(),
@@ -51,7 +81,8 @@ class Blueprints
                                         'display' => __('entitlements::cp.field_subject_id'),
                                         'instructions' => __('entitlements::cp.field_subject_id_instructions'),
                                         'width' => 50,
-                                        'validate' => ['required', 'max:64'],
+                                        'if' => ['subject_kind' => 'equals other'],
+                                        'validate' => ['required_if:subject_kind,other', 'max:64'],
                                     ],
                                 ],
                             ],
@@ -61,12 +92,9 @@ class Blueprints
                             'fields' => [
                                 [
                                     'handle' => 'product_slug',
-                                    'field' => [
-                                        'type' => 'text',
-                                        'display' => __('entitlements::cp.field_product_slug'),
-                                        'instructions' => __('entitlements::cp.field_product_slug_instructions'),
-                                        'validate' => ['required', 'max:191'],
-                                    ],
+                                    'field' => self::productField(
+                                        __('entitlements::cp.field_product_slug_instructions'),
+                                    ),
                                 ],
                                 [
                                     'handle' => 'source_ref',
@@ -168,12 +196,9 @@ class Blueprints
         if ($creating) {
             $fields[] = [
                 'handle' => 'product_slug',
-                'field' => [
-                    'type' => 'text',
-                    'display' => __('entitlements::cp.field_product_slug'),
-                    'instructions' => __('entitlements::cp.limits_product_instructions'),
-                    'validate' => ['required', 'max:191'],
-                ],
+                'field' => self::productField(
+                    __('entitlements::cp.limits_product_instructions'),
+                ),
             ];
         }
 
@@ -272,11 +297,51 @@ class Blueprints
             'display' => __('entitlements::cp.field_subject_type'),
             'instructions' => __('entitlements::cp.field_subject_type_instructions'),
             'width' => 50,
-            'validate' => ['required', 'max:160'],
+            'if' => ['subject_kind' => 'equals other'],
+            'validate' => ['required_if:subject_kind,other', 'max:160'],
         ];
 
         return $types === []
             ? $base + ['type' => 'text']
             : $base + ['type' => 'select', 'options' => $types, 'clearable' => false];
+    }
+
+    /**
+     * A picker with names when some addon has registered its products, free
+     * text when none has.
+     *
+     * With a catalogue the picker offers its entries and nothing else, not
+     * even slugs already granted (design review, 03.10.2026): new grants are
+     * made by name. The server still accepts any slug, because the catalogue
+     * names products and never decides which may be granted; an integration
+     * posting an old slug keeps working, and the grant is flagged on its page.
+     *
+     * The catalogue is read once: a source may query.
+     *
+     * @return array<string, mixed>
+     */
+    public static function productField(string $instructions): array
+    {
+        $base = ['validate' => ['required', 'max:191']];
+
+        $products = app(ProductCatalog::class)->all();
+
+        if ($products === []) {
+            return $base + [
+                'type' => 'text',
+                'display' => __('entitlements::cp.field_product_slug'),
+                'instructions' => $instructions,
+            ];
+        }
+
+        return $base + [
+            'type' => 'select',
+            'display' => __('entitlements::cp.field_product'),
+            'instructions' => __('entitlements::cp.field_product_instructions'),
+            'options' => app(ProductCatalog::class)->options($products),
+            'searchable' => true,
+            'clearable' => false,
+            'placeholder' => __('entitlements::cp.field_product_placeholder'),
+        ];
     }
 }

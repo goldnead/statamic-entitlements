@@ -77,9 +77,15 @@ const isEmpty = computed(() => props.rows.length === 0);
             <!-- Client mode: a site has a handful of products, not thousands. -->
             <Listing :items="rows" :columns="columns" preferences-prefix="entitlements-limits" sort-column="product_slug" sort-direction="asc">
                 <template #cell-product_slug="{ row }">
-                    <Link v-if="row.edit_url" :href="row.edit_url" class="font-mono">{{ row.product_slug }}</Link>
-                    <span v-else class="font-mono">{{ row.product_slug }}</span>
-                </template>
+                    <template v-if="row.product_label && row.product_label !== row.product_slug">
+                        <Link v-if="row.edit_url" :href="row.edit_url">{{ row.product_label }}</Link>
+                        <span v-else>{{ row.product_label }}</span>
+                        <code class="ms-2 text-2xs text-gray-600 dark:text-gray-400">{{ row.product_slug }}</code>
+                    </template>
+                    <template v-else>
+                        <Link v-if="row.edit_url" :href="row.edit_url" class="font-mono">{{ row.product_slug }}</Link>
+                        <span v-else class="font-mono">{{ row.product_slug }}</span>
+                    </template>                </template>
 
                 <template #cell-limits="{ row }">
                     <div v-if="row.limits.length" class="flex flex-wrap gap-1.5">

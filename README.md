@@ -322,6 +322,21 @@ grant it. Unbound, bundles do not exist.
 **`config('entitlements.sources')`** — display names for sources. A registry, never a whitelist: an
 unregistered source writes, resolves and grants access exactly like a registered one.
 
+**`Entitlements::registerProducts()`**: names for product slugs, so the Control Panel offers a
+picker instead of a text field. Same rule as sources: names only, never a whitelist.
+
+```php
+Entitlements::registerProducts(fn () => [
+    'choiraccelerator' => 'Choir Accelerator',
+    'masterclass' => ['label' => 'Masterclass', 'group' => 'Adrian Goldner'],
+]);
+```
+
+A closure (read when a form asks, never at boot), an array, an object with
+`grantableProducts()`, or a class tagged `entitlements.product-catalog`. A source that throws is
+logged and skipped. While no source answers with a product, every product field stays free text.
+`goldnead/statamic-products` registers its accesses this way.
+
 ## Optional siblings
 
 Attached by `class_exists`, never by Composer. With none installed the package still writes grants,
@@ -362,6 +377,34 @@ Four permissions, because there are four different jobs:
 
 Manual grants are always written with source `manual`; the form does not let an admin type
 `thrivecart` and fabricate a purchase in the audit trail.
+
+The grant form picks a person through core's user search (name or email); type and ID remain for
+any other subject. With a [product catalogue](#extension-points) the product is picked by name in
+the grant form and in "new limits", from the catalogue's entries only. Grants on a slug no source
+knows stay valid and are flagged "not in the catalogue" on the grant and on the user page.
+
+A user subject reads as the person: name, email and a link to her user page in the listing, on
+the grant and on the revocation form. The listing search matches names, emails and catalogue
+names as well as slugs, and `?subject=type:id` filters it to one subject.
+
+### On the user page
+
+Add the section to your user blueprint:
+
+```yaml
+-
+  handle: zugaenge
+  field:
+    type: user_entitlements
+    display: Zugänge
+```
+
+It lists the user's own grants (name, state, source, from, until, link to the grant), grants an
+access from a stack (picker, optional start and end) and revokes with a mandatory reason. Granting
+posts to the manual grant and revoking to the revocation, so the result is the same row, source
+`manual`, with the acting admin, and the same four permissions apply: without `view entitlements`
+the section shows nothing, the grant button needs `grant entitlements`, revoking needs
+`revoke entitlements`. It stores nothing on the user. On the create screen it asks to save first.
 
 Set `entitlements.cp.enabled` to `false` to remove the screens. The switch bites on the routes as
 well as on the nav entry.

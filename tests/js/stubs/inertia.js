@@ -12,6 +12,9 @@ export const router = {
     reload(options = {}) {
         this.calls.push({ method: 'reload', options });
     },
+    visit(url, options = {}) {
+        this.calls.push({ method: 'visit', url, options });
+    },
     get(url, options = {}) {
         this.calls.push({ method: 'get', url, options });
     },

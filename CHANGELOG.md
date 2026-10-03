@@ -4,6 +4,56 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this package
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Picking instead of typing. Granting no longer asks for slugs and IDs from memory.
+
+### Added
+
+- **Product catalogue.** `Entitlements::registerProducts()` (a closure, an array, an object with
+  `grantableProducts()`, or the container tag `entitlements.product-catalog`) lets another addon
+  announce grantable products as `slug => label` or `slug => ['label' => …, 'group' => …]`. Read
+  when a form asks, never at boot; a failing source is logged and skipped. Names only, never a
+  whitelist: an unregistered slug still writes, resolves and grants. `Entitlements::grantableProducts()`
+  reads it. statamic-products registers its accesses from its next release.
+- **Grant form picks the person.** "Granted to" is a person by default, chosen through core's
+  `users` search by name or email; the reference is derived by the bound `SubjectResolver`, as
+  `Entitlements::grant($user, …)` does. Type and ID stay available for every other subject.
+- **Product pickers.** With a catalogue, the product in the grant form, in "new limits" and in
+  the user section is a searchable select offering catalogue entries only, by name. Slugs already
+  granted that no source knows are not offered; they stay visible, flagged, on the grant and in the
+  user section. The server still accepts any slug, so integrations posting one keep working.
+  Without any catalogue every product field stays free text.
+- **People by name.** Where the subject is a Statamic user, the listing, the grant and the
+  revocation form show her name (with email, linked to her user page); the key stays as a side
+  note. Other subject types keep the `SubjectResolver` label. The listing search also matches a
+  person's name and email and a product's catalogue name. `?subject=type:id` filters the listing to
+  one subject; the user section's "all grants" link uses it.
+- **"Zugänge" section for user pages.** The fieldtype `user_entitlements` lists a user's grants
+  (name, state, source, from, until, link to the grant), grants an access from a stack (picker,
+  optional start and end) and revokes with a mandatory reason. It posts to the manual grant and
+  the revocation, so it writes exactly what Users > Entitlements writes (source `manual`, actor)
+  and is gated by the same permissions. It stores nothing on the user. New read route
+  `entitlements.user` (`view entitlements`).
+- Grant detail, listing and limits show the product name next to the slug; the grant detail and
+  the user section flag a slug no catalogue source knows.
+
+### Changed
+
+- German Control Panel: the screens are called "Vergaben" (were "Berechtigungen", which clashed with
+  core's roles screen under the same section); permission labels follow. One set of terms
+  throughout: a grant is a "Vergabe", what is granted a "Zugang", granting is "Zugang
+  freischalten", revoking "Zugang entziehen". English is unchanged.
+- The revocation is its own page (`entitlements::Entitlements/Revoke`) instead of core's
+  PublishForm, whose button can only say "Save"; its button reads "Revoke access". Same route,
+  same validation, same permission.
+- Revoked grants in the user section show when they were revoked instead of an empty "until".
+- The grant detail page and the user section show dates in the viewer's locale and timezone, as
+  core does; the UTC stamp is the tooltip on the detail page.
+- The manual grant accepts `subject_kind` (`user`, `other`) and `subject_user`. A request without
+  `subject_kind` that sends `subject_type` is treated as `other`, so existing integrations keep
+  working unchanged.
+
 ## [1.5.0] — 2026-09-25
 
 ### Notes

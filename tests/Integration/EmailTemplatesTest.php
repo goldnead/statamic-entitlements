@@ -20,6 +20,18 @@ beforeEach(function () {
 });
 
 it('offers the default mail to email-templates:import', function () {
+    // email-templates 2.8 and later: announced through its registry, never also tagged.
+    if (app()->bound(MailTemplates::REGISTRY)) {
+        $definition = app(MailTemplates::REGISTRY)->find('entitlements-limit-reached');
+
+        expect($definition)->not->toBeNull()
+            ->and($definition->toTemplateData()->subject)->toBe('{{ limit_label }}: Grenze erreicht')
+            ->and(collect(iterator_to_array(app()->tagged('email-templates.sources')))
+                ->contains(fn ($s) => $s instanceof TemplateSource))->toBeFalse();
+
+        return;
+    }
+
     $sources = iterator_to_array(app()->tagged('email-templates.sources'));
 
     $ours = collect($sources)->first(fn ($s) => $s instanceof TemplateSource);

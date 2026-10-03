@@ -7,6 +7,7 @@ use Goldnead\Entitlements\Bridges\ActivityBridge;
 use Goldnead\Entitlements\Contracts\PackageResolver;
 use Goldnead\Entitlements\Contracts\SubjectResolver;
 use Goldnead\Entitlements\Events\LimitReached;
+use Goldnead\Entitlements\Fieldtypes\UserEntitlements;
 use Goldnead\Entitlements\Integrations\Automations\AutomationsBridge;
 use Goldnead\Entitlements\Integrations\EmailTemplates\MailTemplates;
 use Goldnead\Entitlements\Integrations\Insights\Active;
@@ -20,6 +21,7 @@ use Goldnead\Entitlements\Mail\SendLimitReachedMail;
 use Goldnead\Entitlements\Query\Scopes\Filters;
 use Goldnead\Entitlements\Support\MorphSubjectResolver;
 use Goldnead\Entitlements\Support\NullPackageResolver;
+use Goldnead\Entitlements\Support\ProductCatalog;
 use Goldnead\Entitlements\Support\Settings;
 use Goldnead\Entitlements\Support\SourceRegistry;
 use Goldnead\Entitlements\Support\SubjectExtensions;
@@ -73,6 +75,7 @@ class ServiceProvider extends AddonServiceProvider
         // Shared on purpose: a sibling registers its subject extension once at
         // boot, and every later read has to see it.
         $this->app->singleton(SubjectExtensions::class);
+        $this->app->singleton(ProductCatalog::class);
         $this->app->singleton(LimitCatalog::class);
         $this->app->singleton(QuotaManager::class);
 
@@ -159,6 +162,7 @@ class ServiceProvider extends AddonServiceProvider
         $this->bootMigrations()
             ->bootCommands()
             ->bootFilterScopes()
+            ->bootUserSection()
             ->bootNavigation()
             ->bootPermissions()
             ->bootActivityBridge()
@@ -206,6 +210,21 @@ class ServiceProvider extends AddonServiceProvider
         foreach (self::LISTING_FILTERS as $scope) {
             $scope::register();
         }
+
+        return $this;
+    }
+
+    /**
+     * The "Zugänge" section for user blueprints.
+     *
+     * It lives in `src/Fieldtypes/`, which core autoloads, and is registered
+     * here as well for the reason the filters are: core's pass runs only once
+     * the addon is found through the manifest, which a package test suite never
+     * does. `register()` is idempotent.
+     */
+    protected function bootUserSection(): self
+    {
+        UserEntitlements::register();
 
         return $this;
     }
