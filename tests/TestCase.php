@@ -58,7 +58,7 @@ abstract class TestCase extends Orchestra
         self::$rolesToRemove[] = $handle;
     }
 
-    protected function tearDown(): void
+    public static function removeRememberedRoles(): void
     {
         $handles = self::$rolesToRemove;
         self::$rolesToRemove = [];
@@ -66,6 +66,11 @@ abstract class TestCase extends Orchestra
         foreach ($handles as $handle) {
             Role::find($handle)?->delete();
         }
+    }
+
+    protected function tearDown(): void
+    {
+        self::removeRememberedRoles();
 
         parent::tearDown();
     }
