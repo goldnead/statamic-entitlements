@@ -31,6 +31,10 @@ function cpUserWith(array $permissions): Statamic\Contracts\Auth\User
 
     Role::make($handle)->addPermission($permissions)->save();
 
+    // roles.yaml lives in the testbench app under vendor/ and outlives the run;
+    // TestCase::tearDown() removes the role again.
+    TestCase::rememberRoleForTeardown($handle);
+
     $user = User::make()
         ->email(Str::random(8).'@example.test')
         ->assignRole($handle);

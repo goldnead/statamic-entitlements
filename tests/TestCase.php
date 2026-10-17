@@ -11,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Support\Facades\DB;
 use Orchestra\Testbench\TestCase as Orchestra;
+use Statamic\Facades\Role;
 use Statamic\Facades\Stache;
 use Statamic\Licensing\Outpost;
 use Statamic\Providers\StatamicServiceProvider;
@@ -41,6 +42,32 @@ abstract class TestCase extends Orchestra
 
         app('brand-context')->forget();
         ActivityBridge::forget();
+    }
+
+    /** @var list<string> */
+    private static array $rolesToRemove = [];
+
+    /**
+     * cpUserWith() saves roles into the testbench app's roles.yaml, which lives in
+     * vendor/ and survives the run. Left alone it grew by one role per call
+     * (858 of them turned a 27 second suite into minutes), so every role the
+     * helper makes is handed in here and deleted again in tearDown().
+     */
+    public static function rememberRoleForTeardown(string $handle): void
+    {
+        self::$rolesToRemove[] = $handle;
+    }
+
+    protected function tearDown(): void
+    {
+        $handles = self::$rolesToRemove;
+        self::$rolesToRemove = [];
+
+        foreach ($handles as $handle) {
+            Role::find($handle)?->delete();
+        }
+
+        parent::tearDown();
     }
 
     protected function getPackageProviders($app): array
