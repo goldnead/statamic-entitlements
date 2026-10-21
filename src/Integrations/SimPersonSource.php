@@ -15,16 +15,16 @@ use Statamic\Facades\User;
  * pending, expired and revoked grants are left out, and so is any grant of somebody else.
  *
  * Nothing is written here and no line of the log names the person.
+ *
+ * The manager is not injected: the source is built at boot to be registered, and the manager is a singleton that
+ * keeps the event dispatcher it was built with. Built that early it would hold the real one, not a test's fake.
+ * The address is matched as the grant stores it, so a CRM that spells it differently finds nothing here.
  */
 class SimPersonSource implements ProvidesSimPersons
 {
     /** Most slugs one person hands over, so a copy stays small whatever the data holds. */
     private const LIMIT = 50;
 
-    /**
-     * Not injected: the source is built at boot to be registered, and the manager is a singleton that keeps
-     * the event dispatcher it was built with. Built that early it would hold the real one, not a test's fake.
-     */
     public function personSourceId(): string
     {
         return 'entitlements';
