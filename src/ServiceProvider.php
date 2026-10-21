@@ -3,6 +3,7 @@
 namespace Goldnead\Entitlements;
 
 use Goldnead\BrandContext\Settings\SettingsRegistry;
+use Goldnead\BrandContext\Simulation\PersonSources;
 use Goldnead\Entitlements\Bridges\ActivityBridge;
 use Goldnead\Entitlements\Contracts\PackageResolver;
 use Goldnead\Entitlements\Contracts\SubjectResolver;
@@ -14,6 +15,7 @@ use Goldnead\Entitlements\Integrations\Insights\Active;
 use Goldnead\Entitlements\Integrations\Insights\Expired;
 use Goldnead\Entitlements\Integrations\Insights\Granted;
 use Goldnead\Entitlements\Integrations\Insights\Revoked;
+use Goldnead\Entitlements\Integrations\SimPersonSource;
 use Goldnead\Entitlements\Integrations\WebhookManager\WebhookManagerBridge;
 use Goldnead\Entitlements\Limits\LimitCatalog;
 use Goldnead\Entitlements\Limits\QuotaManager;
@@ -122,6 +124,12 @@ class ServiceProvider extends AddonServiceProvider
         $this->app->make('events')->listen(LimitReached::class, [SendLimitReachedMail::class, 'handle']);
 
         $this->registerSiblingBridges();
+
+        // The access she holds, as a source for the dry run's "as it is for person X". Optional: an older
+        // brand-context has no PersonSources, and then the addon simply offers nothing there.
+        if (class_exists(PersonSources::class)) {
+            $this->app->make(PersonSources::class)->register(SimPersonSource::class);
+        }
     }
 
     /**

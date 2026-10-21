@@ -4,6 +4,12 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this package
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- Person source for the funnel map's dry run (`entitlements`, via statamic-brand-context): the access a person holds now, from her e-mail and her Statamic user. Read only; only grants that give access now are offered; nothing is written or logged. Without person sources in brand-context nothing is registered.
+
 ## [1.7.0] — 2026-10-17
 
 ### Changed
