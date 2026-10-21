@@ -6,6 +6,8 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## [1.8.0] — 2026-10-21
+
 ### Added
 
 - Person source for the funnel map's dry run (`entitlements`, via statamic-brand-context): the access a person holds now, from her e-mail and her Statamic user. Read only; only grants that give access now are offered; nothing is written or logged. Without person sources in brand-context nothing is registered.
