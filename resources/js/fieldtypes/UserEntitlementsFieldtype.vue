@@ -135,13 +135,38 @@ async function grant() {
         Statamic.$toast.success(__('entitlements::cp.user_grant_done'));
         await load();
     } catch (e) {
-        if (e?.response?.status === 422) {
+        if (e?.response?.status === 409 && e.response.data?.revoked === true) {
+            // A revoked grant stays revoked when "granted" again; the server
+            // answers 409. Not a success: point at "Restore" in the row's menu,
+            // and reload so the row shows what is true.
+            granting.value = false;
+            Statamic.$toast.error(__('entitlements::cp.user_grant_revoked_hint'));
+            await load();
+        } else if (e?.response?.status === 422) {
             errors.value = e.response.data?.errors ?? {};
         } else {
             Statamic.$toast.error(e?.response?.data?.message || __('entitlements::cp.user_section_load_failed'));
         }
     } finally {
         saving.value = false;
+    }
+}
+
+// ----------------------------------------------------------------- restoring
+
+const restoreBusy = ref(false);
+
+async function restore(row) {
+    restoreBusy.value = true;
+
+    try {
+        await http.post(row.restore_url, {});
+        Statamic.$toast.success(__('entitlements::cp.user_restore_done'));
+        await load();
+    } catch (e) {
+        Statamic.$toast.error(__('entitlements::cp.user_restore_failed'));
+    } finally {
+        restoreBusy.value = false;
     }
 }
 
@@ -222,6 +247,12 @@ async function revoke() {
                     <Dropdown>
                         <DropdownMenu>
                             <DropdownItem :href="row.show_url" :text="__('entitlements::cp.user_open_grant')" icon="eye" />
+                            <DropdownItem
+                                v-if="row.can_restore && !readOnly"
+                                :text="__('entitlements::cp.restore')"
+                                :disabled="restoreBusy"
+                                @click="restore(row)"
+                            />
                             <DropdownItem
                                 v-if="row.can_revoke && !readOnly"
                                 :text="__('entitlements::cp.user_revoke_action')"

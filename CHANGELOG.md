@@ -6,6 +6,10 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Fixed
+
+- Granting on a user page after a revocation no longer does nothing silently. The row of a revoked grant offers "Restore access" in its menu (with the grant permission), and a manual grant that lands on a revoked grant answers 409 with `saved: false`, `revoked: true` and a `restore_url`, so neither the user section nor the "create grant" form reads it as a success (the section shows a hint). A failed restore has its own message. `grant()` itself still leaves a revoked grant revoked, so a retried webhook cannot undo a refund.
+
 ## [1.8.0] — 2026-10-21
 
 ### Added

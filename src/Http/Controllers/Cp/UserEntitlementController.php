@@ -40,12 +40,13 @@ class UserEntitlementController extends Controller
         $products = $catalog->all();
         $sources = app(SourceRegistry::class);
         $canRevoke = Gate::allows('revoke entitlements');
+        $canGrant = Gate::allows('grant entitlements');
 
         $rows = $this->entitlements->forSubject($reference)
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get()
-            ->map(function (Entitlement $grant) use ($catalog, $products, $sources, $canRevoke) {
+            ->map(function (Entitlement $grant) use ($catalog, $products, $sources, $canRevoke, $canGrant) {
                 $state = $grant->state();
 
                 return [
@@ -64,12 +65,16 @@ class UserEntitlementController extends Controller
                     'show_url' => cp_route('entitlements.show', ['entitlement' => $grant->getKey()]),
                     'revoke_url' => cp_route('entitlements.revoke', ['entitlement' => $grant->getKey()]),
                     'can_revoke' => $canRevoke && $state !== EntitlementState::Revoked,
+                    // Restoring is granting (see EntitlementController::restore()),
+                    // so it needs the grant permission, not the revoke one.
+                    'can_restore' => $canRestore = $canGrant && $state === EntitlementState::Revoked,
+                    'restore_url' => $canRestore
+                        ? cp_route('entitlements.restore', ['entitlement' => $grant->getKey()])
+                        : null,
                 ];
             })
             ->values()
             ->all();
-
-        $canGrant = Gate::allows('grant entitlements');
 
         return [
             'subject' => $reference->key(),
