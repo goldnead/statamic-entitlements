@@ -78,3 +78,30 @@ it('still renders the listing on a migrated install', function () {
 
     expect($response->viewData('page')['component'])->toBe('entitlements::Entitlements/Index');
 });
+
+/*
+ * The detail routes carry the same guard as the listing. It runs as route
+ * middleware, so it answers before the controller's query does.
+ */
+it('shows the setup screen on the entitlement detail when its table is missing', function () {
+    dropEntitlementTables();
+
+    $response = $this->actingAs(cpUserWith(['access cp', 'view entitlements']))
+        ->get(cp_route('entitlements.show', 1))
+        ->assertOk();
+
+    expect($response->viewData('page')['component'])->toBe('entitlements::SetupRequired');
+});
+
+it('sends a guest away from the entitlement detail and shows them no setup screen', function () {
+    dropEntitlementTables();
+
+    $this->get(cp_route('entitlements.show', 1))
+        ->assertRedirect();
+});
+
+it('still answers 404 for an unknown entitlement on a migrated install', function () {
+    $this->actingAs(cpUserWith(['access cp', 'view entitlements']))
+        ->get(cp_route('entitlements.show', 999))
+        ->assertNotFound();
+});

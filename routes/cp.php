@@ -1,10 +1,12 @@
 <?php
 
+use Goldnead\BrandContext\Http\Middleware\GuardSetup;
 use Goldnead\Entitlements\Http\Controllers\Cp\EntitlementController;
 use Goldnead\Entitlements\Http\Controllers\Cp\LimitController;
 use Goldnead\Entitlements\Http\Controllers\Cp\UsageController;
 use Goldnead\Entitlements\Http\Controllers\Cp\UserEntitlementController;
 use Goldnead\Entitlements\Http\Controllers\Cp\WiringController;
+use Goldnead\Entitlements\Support\Setup;
 use Illuminate\Support\Facades\Route;
 
 // The kill switch has to bite here as well as on the nav item. Hiding the entry
@@ -24,7 +26,11 @@ if (! config('entitlements.cp.enabled', true)) {
 | See tests/Feature/RouteParameterCollisionTest.php.
 */
 
-Route::prefix('entitlements')->name('entitlements.')->group(function () {
+// The detail routes of EntitlementController carry the setup guard as well. It
+// runs before route-model binding and before the controller's query.
+$guard = GuardSetup::using(Setup::class, 'entitlements::cp.nav', 'entitlements');
+
+Route::prefix('entitlements')->name('entitlements.')->group(function () use ($guard) {
     Route::get('/', [EntitlementController::class, 'index'])->name('index');
 
     // Before `{entitlement}`, and that one only matches digits anyway. The
@@ -51,9 +57,9 @@ Route::prefix('entitlements')->name('entitlements.')->group(function () {
 
     // `create` is matched before `{entitlement}` and `{entitlement}` only matches
     // digits, so neither can swallow the other.
-    Route::get('{entitlement}', [EntitlementController::class, 'show'])->name('show')->whereNumber('entitlement');
+    Route::get('{entitlement}', [EntitlementController::class, 'show'])->name('show')->whereNumber('entitlement')->middleware([$guard]);
 
-    Route::get('{entitlement}/revoke', [EntitlementController::class, 'revokeForm'])->name('revoke.form')->whereNumber('entitlement');
-    Route::post('{entitlement}/revoke', [EntitlementController::class, 'revoke'])->name('revoke')->whereNumber('entitlement');
-    Route::post('{entitlement}/restore', [EntitlementController::class, 'restore'])->name('restore')->whereNumber('entitlement');
+    Route::get('{entitlement}/revoke', [EntitlementController::class, 'revokeForm'])->name('revoke.form')->whereNumber('entitlement')->middleware([$guard]);
+    Route::post('{entitlement}/revoke', [EntitlementController::class, 'revoke'])->name('revoke')->whereNumber('entitlement')->middleware([$guard]);
+    Route::post('{entitlement}/restore', [EntitlementController::class, 'restore'])->name('restore')->whereNumber('entitlement')->middleware([$guard]);
 });
