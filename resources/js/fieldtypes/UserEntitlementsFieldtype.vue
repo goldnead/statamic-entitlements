@@ -123,7 +123,7 @@ async function grant() {
     errors.value = {};
 
     try {
-        await http.post(props.meta.storeUrl, {
+        const response = await http.post(props.meta.storeUrl, {
             subject_kind: 'user',
             subject_user: [userId.value],
             product_slug: form.value.product_slug,
@@ -131,8 +131,18 @@ async function grant() {
             expires_at: iso(form.value.expires_at),
         });
 
+        const { data } = response ?? {};
+
         granting.value = false;
-        Statamic.$toast.success(__('entitlements::cp.user_grant_done'));
+
+        // A revoked grant stays revoked when "granted" again; the server says
+        // so. Not a success: point at "Restore" in the row's menu.
+        if (data?.revoked === true) {
+            Statamic.$toast.error(__('entitlements::cp.user_grant_revoked_hint'));
+        } else {
+            Statamic.$toast.success(__('entitlements::cp.user_grant_done'));
+        }
+
         await load();
     } catch (e) {
         if (e?.response?.status === 422) {
@@ -142,6 +152,24 @@ async function grant() {
         }
     } finally {
         saving.value = false;
+    }
+}
+
+// ----------------------------------------------------------------- restoring
+
+const restoreBusy = ref(false);
+
+async function restore(row) {
+    restoreBusy.value = true;
+
+    try {
+        await http.post(row.restore_url, {});
+        Statamic.$toast.success(__('entitlements::cp.user_restore_done'));
+        await load();
+    } catch (e) {
+        Statamic.$toast.error(e?.response?.data?.message || __('entitlements::cp.user_section_load_failed'));
+    } finally {
+        restoreBusy.value = false;
     }
 }
 
@@ -222,6 +250,12 @@ async function revoke() {
                     <Dropdown>
                         <DropdownMenu>
                             <DropdownItem :href="row.show_url" :text="__('entitlements::cp.user_open_grant')" icon="eye" />
+                            <DropdownItem
+                                v-if="row.can_restore && !readOnly"
+                                :text="__('entitlements::cp.restore')"
+                                :disabled="restoreBusy"
+                                @click="restore(row)"
+                            />
                             <DropdownItem
                                 v-if="row.can_revoke && !readOnly"
                                 :text="__('entitlements::cp.user_revoke_action')"

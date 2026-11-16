@@ -206,6 +206,8 @@ return [
     'user_product_text_instructions' => 'Kein Addon meldet hier seine Zugänge an, also den Slug eintragen.',
     'user_starts_instructions' => 'Optional. Leer heißt: ab sofort.',
     'user_expires_instructions' => 'Optional. Leer heißt: ohne Ende.',
+    'user_grant_revoked_hint' => 'Dieser Zugang wurde entzogen und bleibt es. Im Menü der Zeile „Zugang wiederherstellen“ wählen.',
+    'user_restore_done' => 'Zugang wiederhergestellt.',
     'user_revoke_action' => 'Entziehen',
     'user_revoke_title' => ':product entziehen',
     'user_revoke_submit' => 'Zugang entziehen',

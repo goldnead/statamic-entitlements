@@ -253,6 +253,56 @@ it('does not offer revoking a grant that is already revoked', function () {
         ->assertJsonPath('rows.0.can_revoke', false);
 });
 
+/*
+ * Adrians Regel vom 04.10.2026: „Ein Versehen wird durch erneutes Freischalten
+ * korrigiert." grant() gibt einen entzogenen Zugang absichtlich unveraendert
+ * zurueck (Webhook-Retries duerfen keine Erstattung rueckgaengig machen). Auf
+ * der User-Seite tat „Freischalten" nach einem Entziehen deshalb stumm nichts.
+ * Jetzt bietet die Zeile „Wiederherstellen" an, und das Freischalten sagt, dass
+ * der Zugang entzogen ist.
+ */
+it('offers restoring a revoked grant to someone who may grant, and only to them', function () {
+    $grant = Entitlements::grant($this->person, 'kurs', 'manual');
+    Entitlements::revoke($grant, 'Versehen');
+    $url = cp_route('entitlements.user', ['userId' => $this->person->id()]);
+
+    $this->actingAs(cpUserWith(['access cp', 'view entitlements', 'grant entitlements']))
+        ->getJson($url)
+        ->assertJsonPath('rows.0.state', 'revoked')
+        ->assertJsonPath('rows.0.can_restore', true)
+        ->assertJsonPath('rows.0.restore_url', cp_route('entitlements.restore', ['entitlement' => $grant->getKey()]));
+
+    $this->actingAs(cpUserWith(['access cp', 'view entitlements', 'revoke entitlements']))
+        ->getJson($url)
+        ->assertJsonPath('rows.0.can_restore', false);
+});
+
+it('does not offer restoring a grant that is not revoked', function () {
+    Entitlements::grant($this->person, 'kurs', 'manual');
+
+    $this->actingAs(cpUserWith(['access cp', 'view entitlements', 'grant entitlements']))
+        ->getJson(cp_route('entitlements.user', ['userId' => $this->person->id()]))
+        ->assertJsonPath('rows.0.can_restore', false);
+});
+
+it('says so when a manual grant lands on a revoked grant, instead of pretending it worked', function () {
+    $grant = Entitlements::grant($this->person, 'kurs', 'manual');
+    Entitlements::revoke($grant, 'Versehen');
+
+    $this->actingAs(cpUserWith(['access cp', 'view entitlements', 'grant entitlements']))
+        ->postJson(cp_route('entitlements.store'), [
+            'subject_kind' => 'user',
+            'subject_user' => [$this->person->id()],
+            'product_slug' => 'kurs',
+        ])
+        ->assertOk()
+        ->assertJsonPath('revoked', true)
+        ->assertJsonPath('restore_url', cp_route('entitlements.restore', ['entitlement' => $grant->getKey()]));
+
+    // Und es bleibt entzogen: das Freischalten stellt nichts still wieder her.
+    expect(Entitlements::allows($this->person, 'kurs'))->toBeFalse();
+});
+
 it('hands the user page section where to read, once it knows the person', function () {
     $this->actingAs(cpUserWith(['access cp', 'view entitlements', 'grant entitlements']));
 

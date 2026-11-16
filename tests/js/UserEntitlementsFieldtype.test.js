@@ -195,6 +195,43 @@ describe('the Zugänge section on a user page', () => {
         expect(wrapper.text()).not.toContain('entitlements::cp.user_revoke_action');
     });
 
+    it('restores a revoked grant from the row menu, then reloads', async () => {
+        const base = answer();
+        const wrapper = mountSection({}, answer({
+            rows: [{ ...base.rows[0], state: 'revoked', can_revoke: false, can_restore: true, restore_url: '/cp/entitlements/7/restore' }],
+        }));
+        await flushPromises();
+
+        const restore = wrapper.findAll('[data-stub="DropdownItem"]').find((i) => i.text() === 'entitlements::cp.restore');
+        await restore.trigger('click');
+        await flushPromises();
+
+        expect(http.post).toHaveBeenCalledWith('/cp/entitlements/7/restore', {});
+        expect(globalThis.Statamic.$toast.success).toHaveBeenCalledWith('entitlements::cp.user_restore_done');
+        expect(http.get).toHaveBeenCalledTimes(2);
+    });
+
+    it('offers no restore unless the server says it may', async () => {
+        const wrapper = mountSection();
+        await flushPromises();
+
+        expect(wrapper.text()).not.toContain('entitlements::cp.restore');
+    });
+
+    it('does not report success when the grant landed on a revoked one', async () => {
+        const wrapper = mountSection();
+        await flushPromises();
+        http.post.mockResolvedValue({ data: { saved: true, revoked: true, restore_url: '/cp/entitlements/7/restore' } });
+
+        await wrapper.findAll('[data-stub="Button"]').find((b) => b.text() === 'entitlements::cp.user_grant_action').trigger('click');
+        await wrapper.find('[data-stub="Combobox"]').setValue('kurs');
+        await wrapper.findAll('[data-stub="Button"]').find((b) => b.text() === 'entitlements::cp.user_grant_submit').trigger('click');
+        await flushPromises();
+
+        expect(globalThis.Statamic.$toast.success).not.toHaveBeenCalled();
+        expect(globalThis.Statamic.$toast.error).toHaveBeenCalledWith('entitlements::cp.user_grant_revoked_hint');
+    });
+
     it('offers no revoke where the server says it may not', async () => {
         const base = answer();
         const wrapper = mountSection({}, answer({ rows: [{ ...base.rows[0], can_revoke: false }] }));
