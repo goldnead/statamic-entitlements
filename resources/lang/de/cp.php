@@ -208,6 +208,8 @@ return [
     'user_expires_instructions' => 'Optional. Leer heißt: ohne Ende.',
     'user_grant_revoked_hint' => 'Dieser Zugang wurde entzogen und bleibt es. Im Menü der Zeile „Zugang wiederherstellen“ wählen.',
     'user_restore_done' => 'Zugang wiederhergestellt.',
+    'user_restore_failed' => 'Der Zugang konnte nicht wiederhergestellt werden.',
+    'grant_revoked_conflict' => 'Dieser Zugang wurde entzogen und bleibt es. Zum Zurückholen „Zugang wiederherstellen“ auf der Vergabe wählen.',
     'user_revoke_action' => 'Entziehen',
     'user_revoke_title' => ':product entziehen',
     'user_revoke_submit' => 'Zugang entziehen',

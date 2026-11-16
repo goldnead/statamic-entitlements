@@ -205,6 +205,8 @@ return [
     'user_expires_instructions' => 'Optional. Leave empty for access without end.',
     'user_grant_revoked_hint' => 'This access was revoked and stays revoked. Choose "Restore access" in the row menu.',
     'user_restore_done' => 'Access restored.',
+    'user_restore_failed' => 'The access could not be restored.',
+    'grant_revoked_conflict' => 'This access was revoked and stays revoked. Choose "Restore access" on the grant to bring it back.',
     'user_revoke_action' => 'Revoke',
     'user_revoke_title' => 'Revoke :product',
     'user_revoke_submit' => 'Revoke access',

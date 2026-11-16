@@ -67,8 +67,10 @@ class UserEntitlementController extends Controller
                     'can_revoke' => $canRevoke && $state !== EntitlementState::Revoked,
                     // Restoring is granting (see EntitlementController::restore()),
                     // so it needs the grant permission, not the revoke one.
-                    'restore_url' => cp_route('entitlements.restore', ['entitlement' => $grant->getKey()]),
-                    'can_restore' => $canGrant && $state === EntitlementState::Revoked,
+                    'can_restore' => $canRestore = $canGrant && $state === EntitlementState::Revoked,
+                    'restore_url' => $canRestore
+                        ? cp_route('entitlements.restore', ['entitlement' => $grant->getKey()])
+                        : null,
                 ];
             })
             ->values()

@@ -295,12 +295,63 @@ it('says so when a manual grant lands on a revoked grant, instead of pretending 
             'subject_user' => [$this->person->id()],
             'product_slug' => 'kurs',
         ])
-        ->assertOk()
+        ->assertStatus(409)
+        ->assertJsonPath('saved', false)
         ->assertJsonPath('revoked', true)
         ->assertJsonPath('restore_url', cp_route('entitlements.restore', ['entitlement' => $grant->getKey()]));
 
     // Und es bleibt entzogen: das Freischalten stellt nichts still wieder her.
     expect(Entitlements::allows($this->person, 'kurs'))->toBeFalse();
+});
+
+it('hands out the restore url only where the row can be restored', function () {
+    $grant = Entitlements::grant($this->person, 'kurs', 'manual');
+    $url = cp_route('entitlements.user', ['userId' => $this->person->id()]);
+
+    // Not revoked: no restore, no url.
+    $this->actingAs(cpUserWith(['access cp', 'view entitlements', 'grant entitlements']))
+        ->getJson($url)
+        ->assertJsonPath('rows.0.can_restore', false)
+        ->assertJsonPath('rows.0.restore_url', null);
+});
+
+it('does not hand out the restore url to someone who may not grant', function () {
+    $grant = Entitlements::grant($this->person, 'kurs', 'manual');
+    Entitlements::revoke($grant, 'Versehen');
+
+    $this->actingAs(cpUserWith(['access cp', 'view entitlements', 'revoke entitlements']))
+        ->getJson(cp_route('entitlements.user', ['userId' => $this->person->id()]))
+        ->assertJsonPath('rows.0.can_restore', false)
+        ->assertJsonPath('rows.0.restore_url', null);
+});
+
+it('grant, revoke, grant again says revoked, restore brings the access back', function () {
+    $admin = cpUserWith(['access cp', 'view entitlements', 'grant entitlements', 'revoke entitlements']);
+    $body = [
+        'subject_kind' => 'user',
+        'subject_user' => [$this->person->id()],
+        'product_slug' => 'kurs',
+    ];
+
+    $this->actingAs($admin)->postJson(cp_route('entitlements.store'), $body)->assertOk()->assertJsonPath('saved', true);
+    expect(Entitlements::allows($this->person, 'kurs'))->toBeTrue();
+
+    $grant = Entitlement::query()->firstOrFail();
+    $this->actingAs($admin)
+        ->postJson(cp_route('entitlements.revoke', ['entitlement' => $grant->getKey()]), ['reason' => 'Versehen'])
+        ->assertOk();
+    expect(Entitlements::allows($this->person, 'kurs'))->toBeFalse();
+
+    $restoreUrl = cp_route('entitlements.restore', ['entitlement' => $grant->getKey()]);
+
+    $this->actingAs($admin)->postJson(cp_route('entitlements.store'), $body)
+        ->assertStatus(409)
+        ->assertJsonPath('saved', false)
+        ->assertJsonPath('restore_url', $restoreUrl);
+    expect(Entitlements::allows($this->person, 'kurs'))->toBeFalse();
+
+    $this->actingAs($admin)->postJson($restoreUrl)->assertOk();
+    expect(Entitlements::allows($this->person, 'kurs'))->toBeTrue();
 });
 
 it('hands the user page section where to read, once it knows the person', function () {

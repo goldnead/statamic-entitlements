@@ -150,21 +150,25 @@ class EntitlementController extends Controller
         // (ui/Publish/Form.vue). Returning a 302 instead makes the XHR follow it
         // with the original verb and re-enter this action until the browser gives
         // up with ERR_TOO_MANY_REDIRECTS.
-        $response = [
+        // grant() hands a revoked grant back untouched (a retried webhook must
+        // not undo a refund), so a manual grant onto one changes nothing. That
+        // is a conflict, not a save: 409 with saved=false, so neither this
+        // endpoint's two callers (the grant form and the user page) can read it
+        // as a success. Restoring is its own action and needs this same
+        // permission.
+        if ($entitlement->state() === EntitlementState::Revoked) {
+            return response()->json([
+                'saved' => false,
+                'revoked' => true,
+                'message' => __('entitlements::cp.grant_revoked_conflict'),
+                'restore_url' => cp_route('entitlements.restore', ['entitlement' => $entitlement->getKey()]),
+            ], 409);
+        }
+
+        return [
             'saved' => true,
             'redirect' => cp_route('entitlements.show', ['entitlement' => $entitlement->getKey()]),
         ];
-
-        // grant() hands a revoked grant back untouched (a retried webhook must
-        // not undo a refund), so a manual grant onto one changes nothing. Say
-        // so instead of answering as if it had worked; restoring is its own
-        // action and needs this same permission.
-        if ($entitlement->state() === EntitlementState::Revoked) {
-            $response['revoked'] = true;
-            $response['restore_url'] = cp_route('entitlements.restore', ['entitlement' => $entitlement->getKey()]);
-        }
-
-        return $response;
     }
 
     public function show(int $entitlement)

@@ -218,10 +218,13 @@ describe('the Zugänge section on a user page', () => {
         expect(wrapper.text()).not.toContain('entitlements::cp.restore');
     });
 
-    it('does not report success when the grant landed on a revoked one', async () => {
-        const wrapper = mountSection();
+    it('does not report success when the grant landed on a revoked one, and reloads the rows', async () => {
+        const base = answer();
+        const wrapper = mountSection({}, answer({
+            rows: [{ ...base.rows[0], state: 'revoked', state_label: 'Revoked', can_revoke: false, can_restore: true, restore_url: '/cp/entitlements/7/restore' }],
+        }));
         await flushPromises();
-        http.post.mockResolvedValue({ data: { saved: true, revoked: true, restore_url: '/cp/entitlements/7/restore' } });
+        http.post.mockRejectedValue({ response: { status: 409, data: { saved: false, revoked: true, restore_url: '/cp/entitlements/7/restore' } } });
 
         await wrapper.findAll('[data-stub="Button"]').find((b) => b.text() === 'entitlements::cp.user_grant_action').trigger('click');
         await wrapper.find('[data-stub="Combobox"]').setValue('kurs');
@@ -230,6 +233,23 @@ describe('the Zugänge section on a user page', () => {
 
         expect(globalThis.Statamic.$toast.success).not.toHaveBeenCalled();
         expect(globalThis.Statamic.$toast.error).toHaveBeenCalledWith('entitlements::cp.user_grant_revoked_hint');
+        // load() ran again and the row is still the revoked one.
+        expect(http.get).toHaveBeenCalledTimes(2);
+        expect(wrapper.find('[data-grant="7"]').text()).toContain('Revoked');
+    });
+
+    it('says so, in its own words, when a restore fails', async () => {
+        const base = answer();
+        const wrapper = mountSection({}, answer({
+            rows: [{ ...base.rows[0], state: 'revoked', can_revoke: false, can_restore: true, restore_url: '/cp/entitlements/7/restore' }],
+        }));
+        await flushPromises();
+        http.post.mockRejectedValue({ response: { status: 403, data: { message: 'This action is unauthorized.' } } });
+
+        await wrapper.findAll('[data-stub="DropdownItem"]').find((i) => i.text() === 'entitlements::cp.restore').trigger('click');
+        await flushPromises();
+
+        expect(globalThis.Statamic.$toast.error).toHaveBeenCalledWith('entitlements::cp.user_restore_failed');
     });
 
     it('offers no revoke where the server says it may not', async () => {

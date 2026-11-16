@@ -123,7 +123,7 @@ async function grant() {
     errors.value = {};
 
     try {
-        const response = await http.post(props.meta.storeUrl, {
+        await http.post(props.meta.storeUrl, {
             subject_kind: 'user',
             subject_user: [userId.value],
             product_slug: form.value.product_slug,
@@ -131,21 +131,18 @@ async function grant() {
             expires_at: iso(form.value.expires_at),
         });
 
-        const { data } = response ?? {};
-
         granting.value = false;
-
-        // A revoked grant stays revoked when "granted" again; the server says
-        // so. Not a success: point at "Restore" in the row's menu.
-        if (data?.revoked === true) {
-            Statamic.$toast.error(__('entitlements::cp.user_grant_revoked_hint'));
-        } else {
-            Statamic.$toast.success(__('entitlements::cp.user_grant_done'));
-        }
-
+        Statamic.$toast.success(__('entitlements::cp.user_grant_done'));
         await load();
     } catch (e) {
-        if (e?.response?.status === 422) {
+        if (e?.response?.status === 409 && e.response.data?.revoked === true) {
+            // A revoked grant stays revoked when "granted" again; the server
+            // answers 409. Not a success: point at "Restore" in the row's menu,
+            // and reload so the row shows what is true.
+            granting.value = false;
+            Statamic.$toast.error(__('entitlements::cp.user_grant_revoked_hint'));
+            await load();
+        } else if (e?.response?.status === 422) {
             errors.value = e.response.data?.errors ?? {};
         } else {
             Statamic.$toast.error(e?.response?.data?.message || __('entitlements::cp.user_section_load_failed'));
@@ -167,7 +164,7 @@ async function restore(row) {
         Statamic.$toast.success(__('entitlements::cp.user_restore_done'));
         await load();
     } catch (e) {
-        Statamic.$toast.error(e?.response?.data?.message || __('entitlements::cp.user_section_load_failed'));
+        Statamic.$toast.error(__('entitlements::cp.user_restore_failed'));
     } finally {
         restoreBusy.value = false;
     }
