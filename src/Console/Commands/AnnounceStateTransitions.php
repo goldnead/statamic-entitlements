@@ -12,11 +12,13 @@ use Goldnead\Entitlements\Events\UsageReset;
 use Goldnead\Entitlements\Limits\LimitCatalog;
 use Goldnead\Entitlements\Models\Entitlement;
 use Goldnead\Entitlements\Models\Usage;
+use Goldnead\Entitlements\Support\ListenerFailed;
 use Goldnead\Entitlements\Support\StateResolver;
 use Goldnead\Entitlements\Support\SubjectReference;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Eloquent\Builder;
+use Throwable;
 
 /**
  * Announces the two state transitions nothing writes.
@@ -105,7 +107,11 @@ class AnnounceStateTransitions extends Command
 
             $entitlement->refresh();
 
-            $events->dispatch(new EntitlementGranted($entitlement, EntitlementState::Scheduled));
+            $event = new EntitlementGranted($entitlement, EntitlementState::Scheduled);
+
+            if (! $this->announce($events, $event, fn () => $this->unclaim($entitlement, EntitlementState::Active, null))) {
+                continue;
+            }
 
             $count++;
         }
@@ -142,7 +148,11 @@ class AnnounceStateTransitions extends Command
 
             $entitlement->refresh();
 
-            $events->dispatch(new EntitlementExpired($entitlement, $until));
+            $event = new EntitlementExpired($entitlement, $until);
+
+            if (! $this->announce($events, $event, fn () => $this->unclaim($entitlement, EntitlementState::Expired, $previous))) {
+                continue;
+            }
 
             $count++;
         }
@@ -176,16 +186,23 @@ class AnnounceStateTransitions extends Command
             ->get();
 
         foreach ($candidates as $usage) {
+            $stamp = $now->format('Y-m-d H:i:s');
+
             $claimed = Usage::query()
                 ->whereKey($usage->getKey())
                 ->whereNull('rolled_over_at')
-                ->update(['rolled_over_at' => $now->format('Y-m-d H:i:s')]) === 1;
+                ->update(['rolled_over_at' => $stamp]) === 1;
 
             if (! $claimed || $usage->used === 0) {
                 continue;
             }
 
-            $events->dispatch(new UsageReset(
+            $unclaim = fn () => Usage::query()
+                ->whereKey($usage->getKey())
+                ->where('rolled_over_at', $stamp)
+                ->update(['rolled_over_at' => null]);
+
+            $event = new UsageReset(
                 holder: new SubjectReference($usage->subject_type, $usage->subject_id),
                 key: $usage->limit_key,
                 previous: $usage->used,
@@ -194,12 +211,57 @@ class AnnounceStateTransitions extends Command
                 periodEnd: $usage->period_end,
                 occurredAt: $usage->period_end,
                 brandId: (int) $usage->brand_id,
-            ));
+            );
+
+            if (! $this->announce($events, $event, $unclaim, ['usage_id' => $usage->getKey()])) {
+                continue;
+            }
 
             $count++;
         }
 
         return $count;
+    }
+
+    /**
+     * Dispatch one announcement; if a listener throws, take the claim back and
+     * report it instead of letting it end the run.
+     *
+     * The claim is written before the event goes out (it has to be, or two
+     * overlapping runs would both announce). Without this, a listener that
+     * throws (a mail server that is down) leaves the claim in place: the
+     * transition counts as announced, is never tried again, and the rest of
+     * the batch is abandoned with it. Releasing the claim lets the next run
+     * try again; `report()` makes sure somebody hears about it.
+     *
+     * @param  callable(): mixed  $unclaim
+     * @param  array<string, scalar|null>  $ids
+     */
+    private function announce(Dispatcher $events, object $event, callable $unclaim, array $ids = []): bool
+    {
+        try {
+            $events->dispatch($event);
+
+            return true;
+        } catch (Throwable $e) {
+            $unclaim();
+
+            report(ListenerFailed::while('announcing a state transition', $event, $e, $ids));
+
+            return false;
+        }
+    }
+
+    /** Hand a claim back, but only if it is still the one this run wrote. */
+    private function unclaim(Entitlement $entitlement, EntitlementState $claimed, ?string $previous): void
+    {
+        Entitlement::query()
+            ->whereKey($entitlement->getKey())
+            ->where('announced_state', $claimed->value)
+            ->update([
+                'announced_state' => $previous,
+                'updated_at' => CarbonImmutable::now('UTC')->format('Y-m-d H:i:s'),
+            ]);
     }
 
     /**

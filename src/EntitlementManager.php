@@ -20,6 +20,7 @@ use Goldnead\Entitlements\Limits\UsageReceipt;
 use Goldnead\Entitlements\Mail\SendLimitReachedMail;
 use Goldnead\Entitlements\Models\Entitlement;
 use Goldnead\Entitlements\Support\AccessDecision;
+use Goldnead\Entitlements\Support\ListenerFailed;
 use Goldnead\Entitlements\Support\ProductCatalog;
 use Goldnead\Entitlements\Support\StateResolver;
 use Goldnead\Entitlements\Support\SubjectExtensions;
@@ -184,7 +185,29 @@ class EntitlementManager
 
         $entitlement->refresh();
 
-        $this->events->dispatch(new EntitlementGranted($entitlement, EntitlementState::Pending, $actor));
+        try {
+            $this->events->dispatch(new EntitlementGranted($entitlement, EntitlementState::Pending, $actor));
+        } catch (Throwable $e) {
+            // Ein Listener ist gescheitert (die Zustellung des Downloads zum
+            // Beispiel). Bliebe der Claim stehen, gewaenne der Retry der Queue
+            // nie wieder und die Zustellung kaeme nie. Also zurueck auf Pending,
+            // so wie grantPending() die Zeile schreibt, und die Exception an den
+            // Aufrufer, damit er es erneut versucht.
+            $this->newQuery()
+                ->whereKey($entitlement->getKey())
+                ->where('status', EntitlementState::Active->value)
+                ->where('announced_state', EntitlementState::Active->value)
+                ->update([
+                    'status' => EntitlementState::Pending->value,
+                    'starts_at' => null,
+                    'announced_state' => EntitlementState::Pending->value,
+                    'updated_at' => CarbonImmutable::now('UTC')->format('Y-m-d H:i:s'),
+                ]);
+
+            $entitlement->refresh();
+
+            throw $e;
+        }
 
         return true;
     }
@@ -299,7 +322,16 @@ class EntitlementManager
 
         $entitlement->refresh();
 
-        $this->events->dispatch(new EntitlementRevoked($entitlement, $reason, $previous, $actor));
+        $event = new EntitlementRevoked($entitlement, $reason, $previous, $actor);
+
+        try {
+            $this->events->dispatch($event);
+        } catch (Throwable $e) {
+            // Der Entzug bleibt: fail closed ist die einzige sichere Richtung.
+            // Aber ein gescheiterter Listener (die Mail an den Kunden) darf
+            // nicht still verschwinden, ein zweiter Aufruf gaebe nur false.
+            report(ListenerFailed::while('announcing a revocation', $event, $e));
+        }
 
         return true;
     }

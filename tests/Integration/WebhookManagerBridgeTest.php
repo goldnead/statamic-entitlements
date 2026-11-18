@@ -5,6 +5,7 @@ use Goldnead\Entitlements\Facades\Entitlements;
 use Goldnead\Entitlements\Integrations\EventCatalog;
 use Goldnead\Entitlements\Integrations\WebhookManager\EntitlementsTrigger;
 use Goldnead\Entitlements\Integrations\WebhookManager\WebhookManagerBridge;
+use Goldnead\Entitlements\Support\ListenerFailed;
 use Goldnead\Entitlements\Support\SubjectReference;
 use Goldnead\WebhookManager\Domain\OutboundWebhook\Models\OutboundWebhook;
 use Goldnead\WebhookManager\Events\TriggerDetected;
@@ -12,6 +13,7 @@ use Goldnead\WebhookManager\Facades\WebhookManager;
 use Goldnead\WebhookManager\Jobs\ProcessOutboundDeliveryJob;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 
@@ -138,4 +140,25 @@ it('registers no second listener on a second boot', function () {
     LimitReached::dispatch($this->anna, $this->anna, 'analyses', 2, 2, 'usage');
 
     expect($heard)->toBe(['entitlements.limit_reached']);
+});
+
+/**
+ * Ein Empfänger, der wegbricht, kostet einen Webhook, nicht den Zugang. Aber
+ * er wird gemeldet, mit Stacktrace und den IDs, statt als einzeilige Warnung
+ * ohne Bezug im Log zu verschwinden.
+ */
+it('reports a failed hand-over with the trigger and the grant, and keeps the grant', function () {
+    Exceptions::fake();
+
+    Event::listen(TriggerDetected::class, function (): void {
+        throw new RuntimeException('Empfänger weg');
+    });
+
+    $grant = Entitlements::grant($this->anna, 'solo', 'manual');
+
+    expect($grant->exists)->toBeTrue();
+
+    Exceptions::assertReported(fn (ListenerFailed $e): bool => $e->context()['trigger'] === 'entitlements.granted'
+        && $e->context()['entitlement_id'] === $grant->getKey()
+        && $e->getPrevious()?->getMessage() === 'Empfänger weg');
 });

@@ -8,6 +8,7 @@ use Goldnead\Entitlements\Events\UsageReset;
 use Goldnead\Entitlements\Integrations\Automations\Triggers\LimitReachedTrigger;
 use Goldnead\Entitlements\Integrations\Automations\Triggers\UsageConsumedTrigger;
 use Goldnead\Entitlements\Integrations\Automations\Triggers\UsageResetTrigger;
+use Goldnead\Entitlements\Support\ListenerFailed;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -110,17 +111,11 @@ class AutomationsBridge
                 try {
                     app(self::DISPATCHER)->dispatch($handle, $event);
                 } catch (Throwable $e) {
-                    Log::warning('statamic-entitlements: dispatching the automation trigger failed.', [
-                        'trigger' => $handle,
-                        'exception' => $e->getMessage(),
-                    ]);
+                    report(ListenerFailed::while('dispatching an automation trigger', $event, $e, ['trigger' => $handle]));
                 }
             });
         } catch (Throwable $e) {
-            Log::warning('statamic-entitlements: dispatching the automation trigger failed.', [
-                'trigger' => $handle,
-                'exception' => $e->getMessage(),
-            ]);
+            report(ListenerFailed::while('dispatching an automation trigger', $event, $e, ['trigger' => $handle]));
         }
     }
 }

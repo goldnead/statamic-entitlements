@@ -4,6 +4,7 @@ namespace Goldnead\Entitlements\Integrations\WebhookManager;
 
 use Goldnead\Entitlements\Integrations\EventCatalog;
 use Goldnead\Entitlements\Integrations\EventPayload;
+use Goldnead\Entitlements\Support\ListenerFailed;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -95,10 +96,7 @@ class WebhookManagerBridge
         try {
             DB::afterCommit(fn () => $this->handOver($handle, $event));
         } catch (Throwable $e) {
-            Log::warning('statamic-entitlements: an event could not be handed to the webhook manager.', [
-                'trigger' => $handle,
-                'exception' => $e->getMessage(),
-            ]);
+            report(ListenerFailed::while('handing an event to the webhook manager', $event, $e, ['trigger' => $handle]));
         }
     }
 
@@ -123,10 +121,7 @@ class WebhookManagerBridge
 
             app('brand-context')->runFor($brand, $send);
         } catch (Throwable $e) {
-            Log::warning('statamic-entitlements: an event could not be handed to the webhook manager.', [
-                'trigger' => $handle,
-                'exception' => $e->getMessage(),
-            ]);
+            report(ListenerFailed::while('handing an event to the webhook manager', $event, $e, ['trigger' => $handle]));
         }
     }
 }
