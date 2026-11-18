@@ -4,6 +4,18 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this package
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.2] — 2026-11-18
+
+### Fixed
+
+- A throwing `UsageConsumed` or `LimitReached` listener no longer costs the caller the receipt: both dispatches are caught and reported, and the receipt of a committed booking is always handed back, so it can be released.
+- The scheduled pass, `claimPending()` and `revoke()` released their claim wrongly when a listener threw: the transition stayed marked as announced for good and the batch ended. Each row is now caught on its own and the claim is released so the next run retries. `claimPending()` goes back to Pending and rethrows so a queue retry wins; `revoke()` keeps the revocation and reports. The bridges `report()` with trigger and ids instead of a bare warning.
+- `renew()` keeps a lifetime grant (no `expires_at`) unlimited and leaves a pending grant alone; NULL sorts first explicitly, so the chosen row no longer depends on the database. `enterGracePeriod()` refuses a Pending row.
+
+### Upgrading
+
+- No migration, no new config key.
+
 ## [1.8.1] — 2026-11-16
 
 ### Fixed
