@@ -209,6 +209,12 @@ class EntitlementManager
      * - **It refuses a revoked grant.** Access taken away deliberately is not
      *   restored by a payment; that is what `restore()` is for, and it is a
      *   decision somebody makes.
+     * - **It never puts an end on a lifetime grant.** A grant without
+     *   `expires_at` already runs longer than any date; it is returned as it
+     *   is and nothing is announced.
+     * - **It ignores an unconfirmed grant.** A Pending row waits for its
+     *   confirmation (`claimPending()`), and renewing it would grant access
+     *   without `EntitlementGranted` ever firing.
      * - **It returns null when there is nothing to renew**, so the caller can
      *   fall back to `grant()` — the honest answer for a first payment.
      *
@@ -220,10 +226,15 @@ class EntitlementManager
         DateTimeInterface $until,
         ?Identity $actor = null,
     ): ?Entitlement {
+        // Lebenslang zuerst, dann das spaeteste Datum. NULL sortiert je
+        // Datenbank verschieden (SQLite und MySQL bei DESC zuletzt, PostgreSQL
+        // zuerst), daher die Regel ausdruecklich.
         $entitlement = $this->forSubject($subject)
             ->where('product_slug', $productSlug)
-            ->whereNot('status', EntitlementState::Revoked->value)
+            ->whereNotIn('status', [EntitlementState::Revoked->value, EntitlementState::Pending->value])
+            ->orderByRaw('CASE WHEN expires_at IS NULL THEN 0 ELSE 1 END')
             ->orderByDesc('expires_at')
+            ->orderByDesc('id')
             ->first();
 
         if ($entitlement === null) {
@@ -233,9 +244,14 @@ class EntitlementManager
         $bisher = $entitlement->expires_at;
         $neu = CarbonImmutable::parse($until)->utc();
 
+        // Lebenslang bleibt lebenslang. Ein Datum waere eine Verkuerzung.
+        if ($bisher === null) {
+            return $entitlement;
+        }
+
         // Nie verkuerzen. Eine verspaetete Zustellung traegt ein altes Datum,
         // und die Zeit ist bezahlt.
-        if ($bisher !== null && $neu->lessThanOrEqualTo($bisher)) {
+        if ($neu->lessThanOrEqualTo($bisher)) {
             return $entitlement;
         }
 
@@ -361,6 +377,12 @@ class EntitlementManager
     public function enterGracePeriod(Entitlement $entitlement, DateTimeInterface $until): bool
     {
         if ($entitlement->isRevoked()) {
+            return false;
+        }
+
+        // Eine unbestaetigte Zeile hatte nie Zugang. Eine Gnadenfrist wuerde
+        // ihn gewaehren, ohne dass EntitlementGranted je gefeuert hat.
+        if ($entitlement->state() === EntitlementState::Pending) {
             return false;
         }
 
