@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use LogicException;
+use Throwable;
 
 /**
  * Limits and their counters.
@@ -195,23 +196,34 @@ class QuotaManager
         $now = CarbonImmutable::now('UTC');
         $own = $this->entitlements()->reference($subject);
 
-        $this->events->dispatch(new UsageConsumed(
-            subject: $own,
-            holder: $quota->holder,
-            key: $key,
-            amount: $amount,
-            used: $used,
-            limit: $quota->limit,
-            product: $quota->product,
-            period: $quota->period,
-            periodStart: $quota->periodStart,
-            periodEnd: $quota->periodEnd,
-            occurredAt: $now,
-            brandId: (int) $row->brand_id,
-        ));
+        // Ab hier ist die Buchung committet. Wirft ein Listener, darf das den
+        // Beleg nicht kosten: ohne ihn kann der Aufrufer die Buchung nie
+        // zurueckgeben. Also abfangen, melden, und der Beleg geht trotzdem raus.
+        try {
+            $this->events->dispatch(new UsageConsumed(
+                subject: $own,
+                holder: $quota->holder,
+                key: $key,
+                amount: $amount,
+                used: $used,
+                limit: $quota->limit,
+                product: $quota->product,
+                period: $quota->period,
+                periodStart: $quota->periodStart,
+                periodEnd: $quota->periodEnd,
+                occurredAt: $now,
+                brandId: (int) $row->brand_id,
+            ));
+        } catch (Throwable $e) {
+            report($e);
+        }
 
         if ($quota->limit !== null && $used >= $quota->limit) {
-            $this->announceReached($row, $quota, $own, $used, $now);
+            try {
+                $this->announceReached($row, $quota, $own, $used, $now);
+            } catch (Throwable $e) {
+                report($e);
+            }
         }
 
         return new UsageReceipt(
