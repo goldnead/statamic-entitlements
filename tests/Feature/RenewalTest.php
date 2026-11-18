@@ -132,3 +132,84 @@ it('renews the grant that runs longest when a subject has more than one', functi
     expect(Entitlement::where('source_ref', 'neu')->first()->expires_at->format('Y-m-d'))->toBe('2026-10-01')
         ->and(Entitlement::where('source_ref', 'alt')->first()->expires_at->format('Y-m-d'))->toBe('2026-07-01');
 });
+
+/**
+ * Lebenslang ist das längste Fenster, das es gibt.
+ *
+ * Die Regel „nie verkürzen" verglich nur, wenn schon ein Datum da war. Ein
+ * Zugang ohne `expires_at` bekam beim Renew eines, lief damit ab, und ein Kauf
+ * auf Lebenszeit wurde still zum Abo.
+ */
+it('never puts an end date on a lifetime grant', function () {
+    $grant = Entitlements::grant($this->subject, 'mitgliedschaft', 'payments', 'lifetime');
+
+    mitAttrappe([EntitlementRenewed::class]);
+
+    $renewed = Entitlements::renew($this->subject, 'mitgliedschaft', CarbonImmutable::now()->addMonth());
+
+    expect($renewed?->getKey())->toBe($grant->getKey())
+        ->and($grant->fresh()->expires_at)->toBeNull()
+        ->and($grant->fresh()->state())->toBe(EntitlementState::Active);
+
+    Event::assertNotDispatched(EntitlementRenewed::class);
+});
+
+/**
+ * NULL sortiert je Datenbank verschieden: SQLite und MySQL legen es bei DESC
+ * ans Ende, PostgreSQL an den Anfang. Ohne explizite Regel hing es an der
+ * Datenbank, welche Zeile verlängert wurde. Lebenslang zählt als längstes.
+ */
+it('treats a lifetime grant as the one that runs longest, on every database', function () {
+    $lifetime = Entitlements::grant($this->subject, 'mitgliedschaft', 'payments', 'lifetime');
+    Entitlements::grant($this->subject, 'mitgliedschaft', 'payments', 'abo',
+        expiresAt: CarbonImmutable::now()->addWeek());
+
+    mitAttrappe([EntitlementRenewed::class]);
+
+    $renewed = Entitlements::renew($this->subject, 'mitgliedschaft', CarbonImmutable::now()->addMonth());
+
+    expect($renewed?->getKey())->toBe($lifetime->getKey())
+        ->and(Entitlement::where('source_ref', 'lifetime')->first()->expires_at)->toBeNull()
+        ->and(Entitlement::where('source_ref', 'abo')->first()->expires_at->format('Y-m-d'))
+        ->toBe(CarbonImmutable::now()->addWeek()->utc()->format('Y-m-d'));
+
+    Event::assertNotDispatched(EntitlementRenewed::class);
+});
+
+/**
+ * Pending heißt: noch nicht bestätigt. Renew hob so eine Zeile auf Active, der
+ * Resolver gewährte Zugang, und `EntitlementGranted` kam nie. Das Double-Opt-in
+ * war übersprungen. Eine unbestätigte Zeile ist nichts, was sich verlängern lässt.
+ */
+it('does not turn an unconfirmed grant into access by renewing it', function () {
+    $pending = Entitlements::grantPending($this->subject, 'mitgliedschaft', 'newsletter_optin', 'optin',
+        expiresAt: CarbonImmutable::now()->addWeek());
+
+    mitAttrappe([EntitlementRenewed::class, EntitlementGranted::class]);
+
+    expect(Entitlements::renew($this->subject, 'mitgliedschaft', CarbonImmutable::now()->addMonth()))->toBeNull()
+        ->and($pending->fresh()->state())->toBe(EntitlementState::Pending)
+        ->and(Entitlements::decide($this->subject, 'mitgliedschaft')->allowed)->toBeFalse();
+
+    Event::assertNotDispatched(EntitlementRenewed::class);
+});
+
+it('renews the confirmed grant and leaves an unconfirmed one alone', function () {
+    $paid = Entitlements::grant($this->subject, 'mitgliedschaft', 'payments', 'abo',
+        expiresAt: CarbonImmutable::now()->addWeek());
+    $pending = Entitlements::grantPending($this->subject, 'mitgliedschaft', 'newsletter_optin', 'optin',
+        expiresAt: CarbonImmutable::now()->addYear());
+
+    $renewed = Entitlements::renew($this->subject, 'mitgliedschaft', CarbonImmutable::now()->addMonth());
+
+    expect($renewed?->getKey())->toBe($paid->getKey())
+        ->and($pending->fresh()->state())->toBe(EntitlementState::Pending);
+});
+
+it('does not put an unconfirmed grant into a grace period', function () {
+    $pending = Entitlements::grantPending($this->subject, 'mitgliedschaft', 'newsletter_optin', 'optin');
+
+    expect(Entitlements::enterGracePeriod($pending, CarbonImmutable::now()->addWeek()))->toBeFalse()
+        ->and($pending->fresh()->state())->toBe(EntitlementState::Pending)
+        ->and(Entitlements::decide($this->subject, 'mitgliedschaft')->allowed)->toBeFalse();
+});
