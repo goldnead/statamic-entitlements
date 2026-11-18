@@ -5,9 +5,11 @@ use Goldnead\Entitlements\Events\UsageConsumed;
 use Goldnead\Entitlements\Facades\Entitlements;
 use Goldnead\Entitlements\Integrations\Automations\AutomationsBridge;
 use Goldnead\Entitlements\Integrations\Automations\Triggers\LimitReachedTrigger;
+use Goldnead\Entitlements\Support\ListenerFailed;
 use Goldnead\Entitlements\Support\SubjectReference;
 use Goldnead\StatamicAutomations\Engine\TriggerDispatcher;
 use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
+use Illuminate\Support\Facades\Exceptions;
 
 it('registers the three limit triggers and leaves the grant triggers to automations', function () {
     expect(app(AutomationsBridge::class)->registered())->toBeTrue();
@@ -67,4 +69,26 @@ it('filters on key and product and builds the context the flow reads', function 
     expect($context['holder'])->toBe(['type' => 'team', 'id' => '7'])
         ->and($context['subject'])->toBe(['type' => 'user', 'id' => '1'])
         ->and($context['limit']['used'])->toBe(50);
+});
+
+it('reports a failed automation with the trigger and the limit, and keeps the booking', function () {
+    Exceptions::fake();
+
+    app()->instance(TriggerDispatcher::class, new class
+    {
+        public function dispatch(string $handle, object|array $event): void
+        {
+            throw new RuntimeException('Automation kaputt');
+        }
+    });
+
+    $anna = new SubjectReference('user', '1');
+    Entitlements::setLimits('solo', ['analyses' => ['value' => 5, 'period' => 'year']]);
+    Entitlements::grant($anna, 'solo', 'manual');
+
+    expect(Entitlements::consume($anna, 'analyses'))->not->toBeNull();
+
+    Exceptions::assertReported(fn (ListenerFailed $e): bool => $e->context()['trigger'] === 'entitlements.usage_consumed'
+        && $e->context()['limit_key'] === 'analyses'
+        && $e->context()['holder'] === 'user:1');
 });
