@@ -10,6 +10,7 @@ use Goldnead\Entitlements\Support\SubjectReference;
 use Goldnead\StatamicAutomations\Engine\TriggerDispatcher;
 use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
 use Illuminate\Support\Facades\Exceptions;
+use Illuminate\Support\Facades\Facade;
 
 it('registers the three limit triggers and leaves the grant triggers to automations', function () {
     expect(app(AutomationsBridge::class)->registered())->toBeTrue();
@@ -91,4 +92,28 @@ it('reports a failed automation with the trigger and the limit, and keeps the bo
     Exceptions::assertReported(fn (ListenerFailed $e): bool => $e->context()['trigger'] === 'entitlements.usage_consumed'
         && $e->context()['limit_key'] === 'analyses'
         && $e->context()['holder'] === 'user:1');
+});
+
+/**
+ * Lehnt automations einen Trigger bei der Registrierung ab, wird das gemeldet
+ * (mit Stacktrace und Handle), nicht nur als Warnung ohne Kontext.
+ */
+it('reports a trigger automations refuses at registration', function () {
+    Exceptions::fake();
+
+    app()->instance('automations', new class
+    {
+        public function registerTrigger(string $triggerClass): void
+        {
+            throw new RuntimeException('Trigger abgelehnt');
+        }
+    });
+
+    // The facade caches the root it resolved first; the fake must be the one asked.
+    Facade::clearResolvedInstance('automations');
+
+    (new AutomationsBridge)->register(app('events'));
+
+    Exceptions::assertReported(fn (ListenerFailed $e): bool => str_starts_with($e->context()['trigger'], 'entitlements.')
+        && $e->getPrevious()?->getMessage() === 'Trigger abgelehnt');
 });
