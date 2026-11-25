@@ -72,6 +72,16 @@ it('refuses to consume nothing and books nothing for it', function () {
     expect(Usage::query()->count())->toBe(0);
 });
 
+it('refuses a negative amount in consume, and accepts zero counts in withinLimit', function () {
+    Entitlements::grant($this->anna, 'solo', 'manual');
+
+    expect(fn () => Entitlements::consume($this->anna, 'analyses', -1))
+        ->toThrow(InvalidArgumentException::class, 'Consume at least 1.');
+
+    // Null ist erlaubt (nur kleiner als null wirft): nichts hinzufügen passt immer.
+    expect(Entitlements::withinLimit($this->anna, 'analyses', 0, 0))->toBeTrue();
+});
+
 it('gives back nothing on a stock key without a receipt, and leaves the counter alone', function () {
     Entitlements::grant($this->anna, 'solo', 'manual');
     stockCounterFor($this->anna, 2);
