@@ -7,7 +7,6 @@ use Goldnead\Entitlements\Integrations\EventPayload;
 use Goldnead\Entitlements\Support\ListenerFailed;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -71,9 +70,7 @@ class WebhookManagerBridge
             try {
                 $manager->registerTrigger(new EntitlementsTrigger($moment));
             } catch (Throwable $e) {
-                Log::warning('statamic-entitlements: the webhook manager would not take the trigger ['.EventCatalog::handle($moment).'].', [
-                    'exception' => $e->getMessage(),
-                ]);
+                report(ListenerFailed::while('registering a trigger with the webhook manager', null, $e, ['trigger' => EventCatalog::handle($moment)]));
 
                 continue;
             }

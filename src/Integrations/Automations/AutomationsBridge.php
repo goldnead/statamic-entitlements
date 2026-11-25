@@ -11,7 +11,6 @@ use Goldnead\Entitlements\Integrations\Automations\Triggers\UsageResetTrigger;
 use Goldnead\Entitlements\Support\ListenerFailed;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -73,6 +72,8 @@ class AutomationsBridge
             return;
         }
 
+        $handle = null;
+
         try {
             $facade = self::FACADE;
             $root = $facade::getFacadeRoot();
@@ -84,6 +85,7 @@ class AutomationsBridge
             }
 
             foreach (self::TRIGGERS as $eventClass => $triggerClass) {
+                $handle = $triggerClass::handle();
                 $root->registerTrigger($triggerClass);
 
                 $events->listen($eventClass, function (object $event) use ($triggerClass): void {
@@ -93,9 +95,7 @@ class AutomationsBridge
 
             $this->registered = true;
         } catch (Throwable $e) {
-            Log::warning('statamic-entitlements: the automation triggers could not be registered.', [
-                'exception' => $e->getMessage(),
-            ]);
+            report(ListenerFailed::while('registering an automation trigger', null, $e, ['trigger' => $handle]));
         }
     }
 

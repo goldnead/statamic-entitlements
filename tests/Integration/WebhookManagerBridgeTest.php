@@ -162,3 +162,25 @@ it('reports a failed hand-over with the trigger and the grant, and keeps the gra
         && $e->context()['entitlement_id'] === $grant->getKey()
         && $e->getPrevious()?->getMessage() === 'Empfänger weg');
 });
+
+/**
+ * Lehnt der Webhook-Manager einen Trigger bei der Registrierung ab, wird das
+ * gemeldet (mit Stacktrace und Handle), nicht nur als Warnung ohne Kontext.
+ * Der Rest bootet weiter.
+ */
+it('reports a trigger the webhook manager refuses at registration, and boots on', function () {
+    Exceptions::fake();
+
+    app()->instance('webhook-manager', new class
+    {
+        public function registerTrigger(object $trigger): void
+        {
+            throw new RuntimeException('Trigger abgelehnt');
+        }
+    });
+
+    (new WebhookManagerBridge)->boot(app('events'));
+
+    Exceptions::assertReported(fn (ListenerFailed $e): bool => str_starts_with($e->context()['trigger'], 'entitlements.')
+        && $e->getPrevious()?->getMessage() === 'Trigger abgelehnt');
+});
